@@ -22,8 +22,8 @@ static int bcd_to_bin(uint8_t bcd) {
 static uint8_t rtc_read_reg(uint8_t reg){
   uint32_t val;
 
-  sys_outb(RTC_ADDR_REG, reg);
-  sys_inb(RTC_DATA_REG, &val);
+  if (sys_outb(RTC_ADDR_REG, reg)!=OK) return -1;
+  if (sys_inb(RTC_DATA_REG, &val)!=OK) return -1;
 
   return val;
 }
@@ -33,7 +33,7 @@ int rtc_read_date(rtc_date *date) {
   if (!date) return -1;
 
   while (rtc_read_reg(RTC_REG_A) & RTC_UIP_MSK){
-    tickdelay(micros_to_ticks(1000));
+    tickdelay(micros_to_ticks(244));
   }
 
   uint8_t day = rtc_read_reg(RTC_REG_DAY);
