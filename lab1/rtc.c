@@ -1,4 +1,10 @@
 #include "rtc.h"
+#include <stdint.h>
+#include <stdbool.h>
+#include <unistd.h> 
+#include <lcom/lcf.h>
+#include <minix/syslib.h>
+
 
 #define TODO return -1
 
