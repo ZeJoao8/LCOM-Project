@@ -1,0 +1,5 @@
+# Ignorar pasta do VSCode
+.vscode/
+
+# Ignorar pasta do Minix (ou outra pasta de build/exercícios)
+.minix-src/
