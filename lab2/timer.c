@@ -4,6 +4,9 @@
 #include <stdint.h>
 
 #include "i8254.h"
+int timer_counter = 0; 
+int hook_id_timer = 0;
+
 
 int (timer_set_frequency)(uint8_t timer, uint32_t freq) {
   
@@ -13,7 +16,12 @@ int (timer_set_frequency)(uint8_t timer, uint32_t freq) {
 
     uint8_t control = (st & 0x0F) | TIMER_LSB_MSB;
 
-    control |= TIMER_SEL0 << timer;
+    switch(timer) {
+        case 0: control |= TIMER_SEL0; break;
+        case 1: control |= TIMER_SEL1; break;
+        case 2: control |= TIMER_SEL2; break;
+        default: return 1; 
+    }
 
     if (sys_outb(TIMER_CTRL, control) != OK) return 1;
 
@@ -31,22 +39,27 @@ int (timer_set_frequency)(uint8_t timer, uint32_t freq) {
 }
 
 int (timer_subscribe_int)(uint8_t *bit_no) {
-    /* To be implemented by the students */
-  printf("%s is not yet implemented!\n", __func__);
+    if (bit_no == NULL) return 1;
 
-  return 1;
+    *bit_no = 0; 
+
+    if (sys_irqsetpolicy(TIMER0_IRQ, IRQ_REENABLE, &hook_id_timer) != OK)
+        return 1;
+
+    if (sys_irqenable(&hook_id_timer) != OK)
+        return 1;
+
+    return 0; // sucesso
 }
 
 int (timer_unsubscribe_int)() {
-  /* To be implemented by the students */
-  printf("%s is not yet implemented!\n", __func__);
-
-  return 1;
+    if (sys_irqdisable(&hook_id_timer) != OK) return 1;
+    if (sys_irqrmpolicy(&hook_id_timer) != OK) return 1;
+    return 0;
 }
 
 void (timer_int_handler)() {
-  /* To be implemented by the students */
-  printf("%s is not yet implemented!\n", __func__);
+    timer_counter++;
 }
 
 
