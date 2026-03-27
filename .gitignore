@@ -1,0 +1,14 @@
+# Ignorar pasta do VSCode
+.vscode/
+
+# Ignorar pasta do Minix (ou outra pasta de build/exercícios)
+.minix-src/
+
+# Ignore Mac system files
+.DS_Store
+
+# Ignore compiled objects and executables
+*.o
+lab2
+output.txt
+trace.txt
