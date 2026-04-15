@@ -7,4 +7,3 @@ int main() {
     printf("sys_outb returned: %d\n", ret);
     return 0;
 }
-
