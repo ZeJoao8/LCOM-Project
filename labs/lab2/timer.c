@@ -6,7 +6,7 @@
 #include "i8254.h"
 
 static int timer_hook_id = 0;
-static uint32_t timer_counter = 0;
+extern int timer_counter;
 
 int (timer_set_frequency)(uint8_t timer, uint32_t freq) {
   if (timer > 2 || freq < 19 || freq > TIMER_FREQ) return 1;

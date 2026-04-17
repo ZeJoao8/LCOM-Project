@@ -8,7 +8,7 @@
 #include "i8042.h"
 #include "mouse.h"
 
-extern int timer_counter;
+int timer_counter = 0;
 
 int main(int argc, char *argv[]) {
   // sets the language of LCF messages (can be either EN-US or PT-PT)
