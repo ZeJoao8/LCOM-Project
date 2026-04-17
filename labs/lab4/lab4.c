@@ -38,7 +38,7 @@ int(mouse_test_packet)(uint32_t cnt) {
   uint8_t bit_no;
 
   // ativa o envio de dados do rato e subscreve as interrupções
-  if (mouse_enable_data_reporting() != 0)
+  if (mouse_write_cmd(MOUSE_ENABLE_DATA_REP) != 0)
     return 1;
 
   if (mouse_subscribe_int(&bit_no) != 0)
