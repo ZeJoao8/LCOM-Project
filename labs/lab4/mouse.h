@@ -14,7 +14,6 @@ int (mouse_unsubscribe_int)();
 void (mouse_ih)();
 void (mouse_sync_packet)();
 void (mouse_parse_packet)();
-bool (mouse_process_interrupt)();
 int (mouse_write_cmd)(uint8_t cmd);
 
 #endif
