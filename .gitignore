@@ -1,3 +1,19 @@
+# object files
+*.o
+
+# libraries (se forem geradas localmente)
+*.a
+
+# executáveis do lab
+lab1/lab1
+lab2/lab2
+lab3/lab3
+lab4/lab4
+
+# lixo de compilação
+*.out
+*.exe
+
 .vscode/
 
 .minix-src/
