@@ -3,47 +3,6 @@
 #include "utils.h"
 #include <lcom/lcf.h>
 
-int kbd_hook_id = 1;
-uint8_t scancode = 0;
-bool kbc_error = false;
-
-int kbd_subscribe_int(uint8_t *bit_no) {
-  *bit_no = BIT(kbd_hook_id);
-  if (sys_irqsetpolicy(KBD_IRQ, IRQ_REENABLE | IRQ_EXCLUSIVE, &kbd_hook_id) !=
-      0) {
-    return 1;
-  }
-  return 0;
-}
-
-int kbd_unsubscribe_int() {
-  if (sys_irqrmpolicy(&kbd_hook_id) != 0) {
-    return 1;
-  }
-  return 0;
-}
-
-void(kbc_ih)() {
-  uint8_t status;
-
-  kbc_error = false;
-
-  if (util_sys_inb(KBC_ST_REG, &status) != 0) {
-    kbc_error = true;
-    return;
-  }
-
-  if (status & KBC_OBF) {
-    if (util_sys_inb(KBC_OUT_BUF, &scancode) != 0) {
-      kbc_error = true;
-      return;
-    }
-
-    if ((status & (KBC_PARITY_ERR | KBC_TIMEOUT_ERR)) != 0) {
-      kbc_error = true;
-    }
-  }
-}
 
 int kbc_read_data(uint8_t *data) {
   uint8_t status;
