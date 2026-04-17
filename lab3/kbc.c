@@ -1,10 +1,7 @@
-
-
 #include "kbc.h"
 #include "i8042.h"
 #include "utils.h"
 #include <lcom/lcf.h>
-
 
 int kbd_hook_id = 1;
 uint8_t scancode = 0;

@@ -12,7 +12,6 @@
 extern uint32_t sys_inb_counter;
 #endif
 
-
 int main(int argc, char *argv[]) {
   // sets the language of LCF messages (can be either EN-US or PT-PT)
   lcf_set_language("EN-US");
@@ -36,7 +35,6 @@ int main(int argc, char *argv[]) {
 
   return 0;
 }
-
 
 int(kbd_test_scan)() {
   int ipc_status;
