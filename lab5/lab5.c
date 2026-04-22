@@ -1,10 +1,16 @@
 // IMPORTANT: you must include the following line in all your C files
 #include <lcom/lcf.h>
-
 #include <lcom/lab5.h>
-
 #include <stdint.h>
 #include <stdio.h>
+
+#include "video_gr.h"
+
+#include "../lab3/kbc.h"
+
+
+
+#define ESC_BREAKCODE 0x81
 
 // Any header files included below this line should have been created by you
 
@@ -31,6 +37,8 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
+
+
 
 int(video_test_init)(uint16_t mode, uint8_t delay) {
     reg86_t reg;
@@ -62,16 +70,112 @@ int(video_test_init)(uint16_t mode, uint8_t delay) {
 }
 int(video_test_rectangle)(uint16_t mode, uint16_t x, uint16_t y,
                           uint16_t width, uint16_t height, uint32_t color) {
-    /* To be completed */
-    printf("%s(0x%03X, %u, %u, %u, %u, 0x%08x): under construction\n",
-            __func__, mode, x, y, width, height, color);
+            if (vg_init(mode) == NULL) {
+        printf("video_test_rectangle: vg_init failed\n");
+        return 1;
+    }
+ 
+    if (vg_draw_rectangle(x, y, width, height, color) != 0) {
+        printf("video_test_rectangle: vg_draw_rectangle failed\n");
+        vg_exit();
+        return 1;
+    }
+ 
+    uint8_t kbd_bit_no;
+    if (kbd_subscribe_int(&kbd_bit_no) != 0) {
+        printf("video_test_rectangle: kbd_subscribe_int failed\n");
+        vg_exit();
+        return 1;
+    }
+ 
+    int     ipc_status;
+    message msg;
+    scancode = 0;
+ 
+    while (scancode != ESC_BREAKCODE) {
+        if (driver_receive(ANY, &msg, &ipc_status) != OK)
+            continue;
+ 
+        if (is_ipc_notify(ipc_status) &&
+            _ENDPOINT_P(msg.m_source) == HARDWARE &&
+            (msg.m_notify.interrupts & kbd_bit_no)) {
+            kbc_ih();
+        }
+    }
+ 
+    if (kbd_unsubscribe_int() != 0) {
+        printf("video_test_rectangle: kbd_unsubscribe_int failed\n");
+        vg_exit();
+        return 1;
+    }
+ 
+    if (vg_exit() != OK) {
+        printf("video_test_rectangle: vg_exit failed\n");
+        return 1;
+    }
+    return 0;
 
-    return 1;
+
+
+
+
 }
 
 int(video_test_xpm)(xpm_map_t xpm, uint16_t x, uint16_t y) {
-    /* To be completed */
-    printf("%s(%8p, %u, %u): under construction\n", __func__, xpm, x, y);
+        if (vg_init(0x105) == NULL) {
+        printf("video_test_xpm: vg_init failed\n");
+        return 1;
+    }
+ 
+    xpm_image_t img;
+    uint8_t *pixmap = xpm_load(xpm, XPM_INDEXED, &img);
+    if (pixmap == NULL) {
+        printf("video_test_xpm: xpm_load failed\n");
+        vg_exit();
+        return 1;
+    }
+ 
+    if (vg_draw_pixmap(pixmap, img, x, y) != 0) {
+        printf("video_test_xpm: vg_draw_pixmap failed\n");
+        vg_exit();
+        return 1;
+    }
+ 
+    uint8_t kbd_bit_no;
+    if (kbd_subscribe_int(&kbd_bit_no) != 0) {
+        printf("video_test_xpm: kbd_subscribe_int failed\n");
+        vg_exit();
+        return 1;
+    }
+ 
+    int     ipc_status;
+    message msg;
+    scancode = 0;
+ 
+    while (scancode != ESC_BREAKCODE) {
+        if (driver_receive(ANY, &msg, &ipc_status) != OK)
+            continue;
+ 
+        if (is_ipc_notify(ipc_status) &&
+            _ENDPOINT_P(msg.m_source) == HARDWARE &&
+            (msg.m_notify.interrupts & kbd_bit_no)) {
+            kbc_ih();
+        }
+    }
+ 
+    if (kbd_unsubscribe_int() != 0) {
+        printf("video_test_xpm: kbd_unsubscribe_int failed\n");
+        vg_exit();
+        return 1;
+    }
+ 
+    if (vg_exit() != OK) {
+        printf("video_test_xpm: vg_exit failed\n");
+        return 1;
+    }
+    return 0;
 
-    return 1;
+
+
+
 }
