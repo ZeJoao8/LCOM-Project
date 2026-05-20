@@ -8,7 +8,7 @@ uint8_t scancode = 0;
 bool kbc_error = false;
 
 int kbd_subscribe_int(uint8_t *bit_no) {
-  *bit_no = BIT(kbd_hook_id);
+  *bit_no = kbd_hook_id;
   if (sys_irqsetpolicy(KBD_IRQ, IRQ_REENABLE | IRQ_EXCLUSIVE, &kbd_hook_id) !=
       0) {
     return 1;

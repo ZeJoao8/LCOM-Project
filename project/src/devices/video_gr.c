@@ -1,12 +1,15 @@
 #include <lcom/lcf.h>
 #include <string.h>
+#include <stdlib.h>
 #include "devices/video_gr.h"
 
 /* ── Module globals ──────────────────────────────────────────────────────── */
 void    *video_mem      = NULL;
+uint8_t *double_buffer  = NULL;
 uint16_t h_res          = 0;
 uint16_t v_res          = 0;
 uint8_t  bits_per_pixel = 0;
+static uint8_t  bytes_pp        = 0;
 
 static uint32_t vram_size = 0;
 
@@ -61,6 +64,14 @@ void *vg_init(uint16_t mode) {
         return NULL;
     }
 
+    bytes_pp = (bits_per_pixel + 7) / 8;
+    double_buffer = (uint8_t *) malloc(vram_size);
+    if (double_buffer == NULL) {
+        printf("vg_init: malloc for double buffer failed\n");
+        return NULL;
+    }
+    memset(double_buffer, 0, vram_size);
+
     return video_mem;
 }
 
@@ -70,12 +81,10 @@ int vg_draw_pixel(uint16_t x, uint16_t y, uint32_t color) {
     if (x >= h_res || y >= v_res)
         return 1;
 
-    uint8_t bytes_per_pixel = (bits_per_pixel + 7) / 8;
+    uint8_t *pixel = double_buffer
+                     + ((uint32_t) y * h_res + x) * bytes_pp;
 
-    uint8_t *pixel = (uint8_t *) video_mem
-                     + ((uint32_t) y * h_res + x) * bytes_per_pixel;
-
-    for (uint8_t b = 0; b < bytes_per_pixel; b++, pixel++)
+    for (uint8_t b = 0; b < bytes_pp; b++, pixel++)
         *pixel = (color >> (8 * b)) & 0xFF;
 
     return 0;
@@ -117,3 +126,16 @@ int vg_draw_pixmap(uint8_t *pixmap, xpm_image_t img, uint16_t x, uint16_t y) {
     return 0;
 }
 
+/* ── Double buffering utilities ──────────────────────────────────────────── */
+
+void clear_buffer(uint32_t color) {
+    uint8_t *p = double_buffer;
+    for (uint32_t i = 0; i < (uint32_t)h_res * v_res; i++) {
+        for (uint8_t b = 0; b < bytes_pp; b++)
+            *p++ = (color >> (8 * b)) & 0xFF;
+    }
+}
+
+void swap_buffers(void) {
+    memcpy(video_mem, double_buffer, vram_size);
+}

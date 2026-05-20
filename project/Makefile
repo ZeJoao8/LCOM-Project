@@ -1,7 +1,7 @@
 PROG=proj
 
 # 1. List ONLY the file names, without any folder paths!
-SRCS = main.c timer.c kbc.c mouse.c video_gr.c utils.c
+SRCS = main.c timer.c kbc.c mouse.c video_gr.c utils.c game.c
 
 # 2. Tell the MINIX make tool where to look for these .c files
 .PATH.c: ./src ./src/devices ./src/game ./include/game
