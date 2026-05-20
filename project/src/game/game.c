@@ -11,74 +11,120 @@
 /* ── Scancodes ────────────────────────────────────────────────────────────── */
 #define W_MAKE    0x11
 #define W_BREAK   0x91
-#define S_MAKE    0x1F
-#define S_BREAK   0x9F
 #define SPACE_MAKE  0x39
 #define SPACE_BREAK 0xB9
 #define ESC_MAKE  0x01
 #define ENTER_MAKE 0x1C
 
 /* ── Physics constants ────────────────────────────────────────────────────── */
-#define GRAVITY       1        /* pixels/frame downward                      */
-#define THRUST       -3        /* pixels/frame upward when W held            */
-#define MAX_VY        8        /* max falling speed                          */
-#define MIN_VY       -6        /* max upward speed                           */
+#define GRAVITY       1
+#define THRUST       -3
+#define MAX_VY        8
+#define MIN_VY       -6
 
 /* ── Layout constants ─────────────────────────────────────────────────────── */
-#define PLAYER_W     20
-#define PLAYER_H     20
-#define PLAYER_X     80        /* fixed horizontal position                  */
-#define FLOOR_H      40        /* ground strip height                        */
+#define PLAYER_W     16
+#define PLAYER_H     24
+#define PLAYER_X     80
+#define FLOOR_H      40
 
-#define MAX_OBSTACLES 6
-#define OBS_W         20
-#define OBS_MIN_H     60
-#define OBS_MAX_H    200
-#define OBS_GAP      250       /* minimum horizontal gap between obstacles   */
+/* ── Zapper types ─────────────────────────────────────────────────────────── */
+#define ZT_HORIZ   0    /* ceiling + floor pair, horizontal gap            */
+#define ZT_DIAG    1    /* slanted pair                                    */
+#define ZT_ROTATE  2    /* rotating 360°                                   */
+#define ZT_SINGLE  3    /* single block (from ceiling or floor)            */
+
+#define MAX_ZAPPERS  6
+#define ZAPPER_W     14
+#define ZAP_CEIL_MIN_H  60
+#define ZAP_CEIL_MAX_H  130
+#define ZAP_FLOOR_MIN_H 60
+#define ZAP_FLOOR_MAX_H 130
+#define ZAP_MIN_GAP   80
+#define ZAP_MAX_GAP  150
+#define ZAPPER_GAP   300
+#define ZAP_MOVE_AMP  20
+#define ZAP_MOVE_SPEED 1
+#define ZAP_ROTATE_R  30
+
+/* ── Coins ───────────────────────────────────────────────────────────────── */
+#define MAX_COINS   30
+#define COIN_SIZE     8
+
+/* ── Missiles ─────────────────────────────────────────────────────────────── */
+#define MAX_MISSILES  3
+#define MISSILE_H    16
+#define MISSILE_W    40
+#define MISSILE_WARN  60      /* frames of warning before missile spawns    */
+#define MISSILE_SPEED 6
 
 /* ── Colors (24-bit, mode 0x115 = 800x600x24) ────────────────────────────── */
-#define COL_BG        0x1A1A2E  /* dark navy background                     */
-#define COL_FLOOR     0x16213E  /* darker floor                             */
-#define COL_PLAYER    0xE94560  /* bright red-pink player                   */
-#define COL_OBSTACLE  0x0F3460  /* dark blue obstacles                      */
-#define COL_OBS_TOP   0x533483  /* purple top                               */
-#define COL_MENU_BG   0x0F0F23  /* very dark menu background                */
-#define COL_TITLE     0xE94560  /* title color                              */
-#define COL_TEXT      0xEEEEEE  /* light text                               */
-#define COL_GAMEOVER  0xFF2222  /* game over red                            */
-#define COL_SCORE     0xFFCC00  /* yellow score                             */
-#define COL_STAR      0xFFFFAA  /* star/particle color                      */
+#define COL_BG        0x1A1A2E
+#define COL_FLOOR     0x16213E
+#define COL_PLAYER    0xE94560
+#define COL_ZAP_BODY  0xFFCC00  /* yellow zapper body                       */
+#define COL_ZAP_TIP   0x888888  /* gray zapper tip                          */
+#define COL_ZAP_GLOW  0xFFFF88  /* bright yellow glow                       */
+#define COL_MENU_BG   0x0F0F23
+#define COL_TITLE     0xE94560
+#define COL_TEXT      0xEEEEEE
+#define COL_GAMEOVER  0xFF2222
+#define COL_SCORE     0xFFCC00
+#define COL_STAR      0xFFFFAA
+#define COL_COIN      0xFFD700
+#define COL_COIN_SHINE 0xFFFF88
+#define COL_WARN      0xFF0000  /* warning red for missiles                  */
 
 /* ── Data structures ──────────────────────────────────────────────────────── */
 typedef struct {
-    int y;                     /* vertical position (x is fixed)             */
-    int vy;                    /* vertical velocity                          */
-    bool thrusting;            /* W key held?                                */
+    int y, vy;
+    bool thrusting;
 } Player;
 
 typedef struct {
-    int x, y;
-    int w, h;
+    int x;
+    int ceil_bot, ceil_h;
+    int floor_top, floor_h;
+    int type;                  /* ZT_HORIZ, ZT_DIAG, ZT_ROTATE, ZT_SINGLE   */
     bool active;
-} Obstacle;
+    int move_type;             /* 0=static, 1=vertical, 2=horizontal        */
+    int move_off, move_dir;
+    int rot_frame;
+} Zapper;
+
+typedef struct {
+    int x, y;
+    bool active;
+} Coin;
+
+typedef struct {
+    int y;
+    int warning;               /* frames remaining before missile spawns    */
+    int active;
+    int x;
+    int speed;
+} Missile;
 
 /* ── Module state ─────────────────────────────────────────────────────────── */
 static game_state_t state = STATE_MENU;
 static Player player;
-static Obstacle obs[MAX_OBSTACLES];
+static Zapper zaps[MAX_ZAPPERS];
+static Coin coins[MAX_COINS];
+static Missile missiles[MAX_MISSILES];
 
 static int  scroll_speed = 3;
 static int  score        = 0;
+static int  coins_collected = 0;
 static int  frame_count  = 0;
 static int  spawn_timer  = 0;
+static int  missile_timer = 0;
 static int  difficulty_timer = 0;
 
-/* screen dimensions (from video_gr) */
 static int  scr_w, scr_h;
 
-/* ── Forward declarations ─────────────────────────────────────────────────── */
 static void reset_game(void);
-static void spawn_obstacle(void);
+static void spawn_zapper(void);
+static void spawn_coins(int cx, int cy, int pattern);
 
 /* ═══════════════════ PUBLIC API ═══════════════════════════════════════════ */
 
@@ -101,32 +147,95 @@ static void reset_game(void) {
     player.vy = 0;
     player.thrusting = false;
 
-    for (int i = 0; i < MAX_OBSTACLES; i++)
-        obs[i].active = false;
+    for (int i = 0; i < MAX_ZAPPERS; i++) zaps[i].active = false;
+    for (int i = 0; i < MAX_COINS; i++) coins[i].active = false;
+    for (int i = 0; i < MAX_MISSILES; i++) missiles[i].active = 0;
 
     scroll_speed = 3;
     score = 0;
+    coins_collected = 0;
     frame_count = 0;
     spawn_timer = 0;
+    missile_timer = 0;
     difficulty_timer = 0;
 }
 
-/* ── Spawn a new obstacle on the right edge ───────────────────────────────── */
-static void spawn_obstacle(void) {
-    for (int i = 0; i < MAX_OBSTACLES; i++) {
-        if (!obs[i].active) {
-            obs[i].active = true;
-            obs[i].x = scr_w;
-            obs[i].w = OBS_W;
+/* ── Spawn a zapper on the right edge ──────────────────────────────────── */
+static void spawn_zapper(void) {
+    for (int i = 0; i < MAX_ZAPPERS; i++) {
+        if (!zaps[i].active) {
+            zaps[i].active = true;
+            zaps[i].x = scr_w;
+            zaps[i].type = rand() % 4;
+            zaps[i].move_type = rand() % 3;
+            zaps[i].move_off = 0;
+            zaps[i].move_dir = 1;
+            zaps[i].rot_frame = 0;
 
-            /* random height between OBS_MIN_H and OBS_MAX_H */
-            obs[i].h = OBS_MIN_H + (rand() % (OBS_MAX_H - OBS_MIN_H + 1));
+            if (zaps[i].type == ZT_SINGLE) {
+                int from_ceiling = rand() % 2;
+                int h = 50 + (rand() % 50);
+                if (from_ceiling) {
+                    zaps[i].ceil_bot = 60 + (rand() % (scr_h - FLOOR_H - 120));
+                    zaps[i].ceil_h = h;
+                    zaps[i].floor_h = 0; zaps[i].floor_top = 0;
+                } else {
+                    zaps[i].floor_top = 60 + (rand() % (scr_h - FLOOR_H - 120));
+                    zaps[i].floor_h = h;
+                    zaps[i].ceil_h = 0; zaps[i].ceil_bot = 0;
+                }
+            } else {
+                int ch = ZAP_CEIL_MIN_H + (rand() % (ZAP_CEIL_MAX_H - ZAP_CEIL_MIN_H + 1));
+                int fh = ZAP_FLOOR_MIN_H + (rand() % (ZAP_FLOOR_MAX_H - ZAP_FLOOR_MIN_H + 1));
+                zaps[i].ceil_h = ch;
+                zaps[i].floor_h = fh;
+                int gs = ZAP_MIN_GAP + (rand() % (ZAP_MAX_GAP - ZAP_MIN_GAP + 1));
+                int max_ceil_bot = scr_h - FLOOR_H - fh - gs - 10;
+                int min_ceil_bot = ch + 10;
+                if (max_ceil_bot < min_ceil_bot) max_ceil_bot = min_ceil_bot + 10;
+                zaps[i].ceil_bot = min_ceil_bot + (rand() % (max_ceil_bot - min_ceil_bot + 1));
+                zaps[i].floor_top = zaps[i].ceil_bot + gs;
+            }
 
-            /* random vertical position, leaving room for floor */
-            int max_y = scr_h - FLOOR_H - obs[i].h;
-            if (max_y < 0) max_y = 0;
-            obs[i].y = rand() % (max_y + 1);
+            int gap_cy;
+            if (zaps[i].type == ZT_SINGLE) {
+                gap_cy = (zaps[i].ceil_h > 0) ? zaps[i].ceil_bot + 30 : zaps[i].floor_top - 30;
+            } else {
+                gap_cy = (zaps[i].ceil_bot + zaps[i].floor_top) / 2;
+            }
+            spawn_coins(zaps[i].x + 40, gap_cy, rand() % 4);
             return;
+        }
+    }
+}
+
+/* ── Spawn coins in patterns near a position ───────────────────────────── */
+static void spawn_coins(int cx, int cy, int pattern) {
+    int count = 4 + (rand() % 4);
+    int placed = 0;
+    for (int i = 0; i < MAX_COINS && placed < count; i++) {
+        if (!coins[i].active) {
+            coins[i].active = true;
+            int off = placed * 12;
+            switch (pattern) {
+                case 0:
+                    coins[i].x = cx + off;
+                    coins[i].y = cy - 10 + abs(off - 24);
+                    break;
+                case 1:
+                    coins[i].x = cx + off;
+                    coins[i].y = cy + 10 - abs(off - 24);
+                    break;
+                case 2:
+                    coins[i].x = cx + off;
+                    coins[i].y = cy;
+                    break;
+                case 3:
+                    coins[i].x = cx + (rand() % 30);
+                    coins[i].y = cy - 10 + (rand() % 20);
+                    break;
+            }
+            placed++;
         }
     }
 }
@@ -139,66 +248,187 @@ void game_update(void) {
     frame_count++;
 
     /* ── Player physics ──────────────────────────────────────────────────── */
-    if (player.thrusting)
-        player.vy += THRUST;
-    else
-        player.vy += GRAVITY;
+    if (player.thrusting) player.vy += THRUST;
+    else player.vy += GRAVITY;
 
-    /* clamp velocity */
     if (player.vy > MAX_VY)  player.vy = MAX_VY;
     if (player.vy < MIN_VY)  player.vy = MIN_VY;
-
     player.y += player.vy;
 
-    /* screen boundaries */
-    if (player.y < 0) {
-        player.y = 0;
-        player.vy = 0;
-    }
+    if (player.y < 0) { player.y = 0; player.vy = 0; }
     int floor_top = scr_h - FLOOR_H - PLAYER_H;
-    if (player.y > floor_top) {
-        player.y = floor_top;
-        player.vy = 0;
+    if (player.y > floor_top) { player.y = floor_top; player.vy = 0; }
+
+    /* ── Move zappers ───────────────────────────────────────────────────── */
+    for (int i = 0; i < MAX_ZAPPERS; i++) {
+        if (!zaps[i].active) continue;
+        zaps[i].x -= scroll_speed;
+
+        if (zaps[i].move_type > 0) {
+            zaps[i].move_off += zaps[i].move_dir * ZAP_MOVE_SPEED;
+            if (zaps[i].move_off > ZAP_MOVE_AMP) zaps[i].move_dir = -1;
+            if (zaps[i].move_off < -ZAP_MOVE_AMP) zaps[i].move_dir = 1;
+        }
+
+        if (zaps[i].type == ZT_ROTATE) zaps[i].rot_frame++;
+
+        int extra = (zaps[i].move_type == 2) ? ZAP_MOVE_AMP : 0;
+        if (zaps[i].x + ZAPPER_W + extra + 10 < 0) zaps[i].active = false;
     }
 
-    /* ── Move obstacles ──────────────────────────────────────────────────── */
-    for (int i = 0; i < MAX_OBSTACLES; i++) {
-        if (obs[i].active) {
-            obs[i].x -= scroll_speed;
-            if (obs[i].x + obs[i].w < 0)
-                obs[i].active = false;
+    /* ── Move coins ──────────────────────────────────────────────────────── */
+    for (int i = 0; i < MAX_COINS; i++) {
+        if (coins[i].active) {
+            coins[i].x -= scroll_speed;
+            if (coins[i].x + COIN_SIZE < 0) coins[i].active = false;
+        }
+    }
+
+    /* ── Missiles ────────────────────────────────────────────────────────── */
+    for (int i = 0; i < MAX_MISSILES; i++) {
+        Missile *m = &missiles[i];
+        if (m->warning > 0) {
+            m->warning--;
+            if (m->warning == 0) {
+                m->active = 1;
+                m->x = scr_w;
+                m->y = 30 + (rand() % (scr_h - FLOOR_H - 60));
+                m->speed = MISSILE_SPEED + (scroll_speed / 2);
+            }
+        }
+        if (m->active) {
+            m->x -= m->speed;
+            if (m->x + MISSILE_W < 0) m->active = 0;
+        }
+    }
+
+    missile_timer++;
+    if (missile_timer >= MISSILE_WARN * 3) {
+        missile_timer = 0;
+        for (int i = 0; i < MAX_MISSILES; i++) {
+            if (missiles[i].warning == 0 && !missiles[i].active) {
+                missiles[i].warning = MISSILE_WARN;
+                missiles[i].y = 30 + (rand() % (scr_h - FLOOR_H - 60));
+                break;
+            }
         }
     }
 
     /* ── Spawn logic ─────────────────────────────────────────────────────── */
     spawn_timer++;
-    int spawn_interval = OBS_GAP / scroll_speed; /* frames between spawns */
+    int spawn_interval = ZAPPER_GAP / scroll_speed;
     if (spawn_interval < 20) spawn_interval = 20;
     if (spawn_timer >= spawn_interval) {
-        spawn_obstacle();
+        spawn_zapper();
         spawn_timer = 0;
     }
 
-    /* ── Score ────────────────────────────────────────────────────────────── */
-    score = frame_count / 6; /* roughly 10 points/second at 60fps */
+    /* ── Coin collection ─────────────────────────────────────────────────── */
+    for (int i = 0; i < MAX_COINS; i++) {
+        if (!coins[i].active) continue;
+        if (PLAYER_X + PLAYER_W > coins[i].x &&
+            PLAYER_X < coins[i].x + COIN_SIZE &&
+            player.y + PLAYER_H > coins[i].y &&
+            player.y < coins[i].y + COIN_SIZE) {
+            coins[i].active = false;
+            coins_collected++;
+            score += 10;
+        }
+    }
+
+    /* ── Score ───────────────────────────────────────────────────────────── */
+    score = (frame_count / 6) + coins_collected * 10;
 
     /* ── Difficulty ramp ─────────────────────────────────────────────────── */
     difficulty_timer++;
-    if (difficulty_timer >= 300 && scroll_speed < 10) { /* every ~5 sec */
+    if (difficulty_timer >= 300 && scroll_speed < 10) {
         scroll_speed++;
         difficulty_timer = 0;
     }
 
-    /* ── Collision detection (AABB) ───────────────────────────────────────── */
-    for (int i = 0; i < MAX_OBSTACLES; i++) {
-        if (!obs[i].active) continue;
-        if (PLAYER_X + PLAYER_W > obs[i].x &&
-            PLAYER_X < obs[i].x + obs[i].w &&
-            player.y + PLAYER_H > obs[i].y &&
-            player.y < obs[i].y + obs[i].h) {
-            state = STATE_GAMEOVER;
-            return;
+    /* ── Collision: zappers ──────────────────────────────────────────────── */
+    for (int i = 0; i < MAX_ZAPPERS; i++) {
+        if (!zaps[i].active) continue;
+        int mo = (zaps[i].move_type == 1) ? zaps[i].move_off : 0;
+        int hx = (zaps[i].move_type == 2) ? zaps[i].move_off : 0;
+        int rf = zaps[i].rot_frame;
+        int zw = ZAPPER_W;
+        int cx = zaps[i].x + hx;
+
+        if (zaps[i].type == ZT_ROTATE) {
+            int shift = (rf % 60 < 30) ? (rf % 30) : (60 - (rf % 30));
+            shift = (shift * 12) / 30;
+            if (rf % 120 < 60) shift = -shift;
+            int c_dx = shift;
+            int f_dx = -shift;
+
+            if (PLAYER_X + PLAYER_W > cx + c_dx &&
+                PLAYER_X < cx + c_dx + zw) {
+                int cb = zaps[i].ceil_bot + mo;
+                int ct = cb - zaps[i].ceil_h;
+                if (player.y + PLAYER_H > ct && player.y < cb)
+                    { state = STATE_GAMEOVER; return; }
+            }
+            if (PLAYER_X + PLAYER_W > cx + f_dx &&
+                PLAYER_X < cx + f_dx + zw) {
+                int ft = zaps[i].floor_top + mo;
+                int fb = ft + zaps[i].floor_h;
+                if (player.y + PLAYER_H > ft && player.y < fb)
+                    { state = STATE_GAMEOVER; return; }
+            }
+        } else if (zaps[i].type == ZT_DIAG) {
+            int c_dx = -6, f_dx = 6;
+            if (PLAYER_X + PLAYER_W > cx + c_dx && PLAYER_X < cx + c_dx + zw) {
+                int cb = zaps[i].ceil_bot + mo;
+                int ct = cb - zaps[i].ceil_h;
+                if (player.y + PLAYER_H > ct && player.y < cb)
+                    { state = STATE_GAMEOVER; return; }
+            }
+            if (PLAYER_X + PLAYER_W > cx + f_dx && PLAYER_X < cx + f_dx + zw) {
+                int ft = zaps[i].floor_top + mo;
+                int fb = ft + zaps[i].floor_h;
+                if (player.y + PLAYER_H > ft && player.y < fb)
+                    { state = STATE_GAMEOVER; return; }
+            }
+        } else if (zaps[i].type == ZT_SINGLE) {
+            if (zaps[i].ceil_h > 0) {
+                if (PLAYER_X + PLAYER_W > cx && PLAYER_X < cx + zw + 8) {
+                    int cb = zaps[i].ceil_bot + mo;
+                    int ct = cb - zaps[i].ceil_h;
+                    if (player.y + PLAYER_H > ct && player.y < cb)
+                        { state = STATE_GAMEOVER; return; }
+                }
+            } else {
+                if (PLAYER_X + PLAYER_W > cx && PLAYER_X < cx + zw + 8) {
+                    int ft = zaps[i].floor_top + mo;
+                    int fb = ft + zaps[i].floor_h;
+                    if (player.y + PLAYER_H > ft && player.y < fb)
+                        { state = STATE_GAMEOVER; return; }
+                }
+            }
+        } else {
+            /* ZT_HORIZ */
+            if (PLAYER_X + PLAYER_W > cx && PLAYER_X < cx + zw) {
+                int cb = zaps[i].ceil_bot + mo;
+                int ft = zaps[i].floor_top + mo;
+                int ct = cb - zaps[i].ceil_h;
+                int fb = ft + zaps[i].floor_h;
+                if ((player.y + PLAYER_H > ct && player.y < cb) ||
+                    (player.y + PLAYER_H > ft && player.y < fb))
+                    { state = STATE_GAMEOVER; return; }
+            }
         }
+    }
+
+    /* ── Collision: missiles ─────────────────────────────────────────────── */
+    for (int i = 0; i < MAX_MISSILES; i++) {
+        if (!missiles[i].active) continue;
+        Missile *m = &missiles[i];
+        if (PLAYER_X + PLAYER_W > m->x &&
+            PLAYER_X < m->x + MISSILE_W &&
+            player.y + PLAYER_H > m->y &&
+            player.y < m->y + MISSILE_H)
+            { state = STATE_GAMEOVER; return; }
     }
 }
 
@@ -329,7 +559,7 @@ void game_draw(void) {
         draw_rect(0, scr_h - FLOOR_H, scr_w, FLOOR_H, COL_FLOOR);
 
         /* Floor line */
-        draw_rect(0, scr_h - FLOOR_H, scr_w, 2, COL_OBS_TOP);
+        draw_rect(0, scr_h - FLOOR_H, scr_w, 2, COL_ZAP_TIP);
 
         /* Background particles (parallax-like scrolling dots) */
         for (int i = 0; i < 30; i++) {
@@ -339,14 +569,73 @@ void game_draw(void) {
             draw_rect(px, py, 1, 1, 0x333355);
         }
 
-        /* Obstacles */
-        for (int i = 0; i < MAX_OBSTACLES; i++) {
-            if (!obs[i].active) continue;
-            draw_rect(obs[i].x, obs[i].y, obs[i].w, obs[i].h, COL_OBSTACLE);
-            /* Top cap */
-            draw_rect(obs[i].x - 2, obs[i].y, obs[i].w + 4, 4, COL_OBS_TOP);
-            /* Bottom cap */
-            draw_rect(obs[i].x - 2, obs[i].y + obs[i].h - 4, obs[i].w + 4, 4, COL_OBS_TOP);
+        /* Zappers */
+        for (int i = 0; i < MAX_ZAPPERS; i++) {
+            if (!zaps[i].active) continue;
+
+            int mo = (zaps[i].move_type == 1) ? zaps[i].move_off : 0;
+            int hx = (zaps[i].move_type == 2) ? zaps[i].move_off : 0;
+            int rf = zaps[i].rot_frame;
+            int zw = ZAPPER_W;
+            int cx = zaps[i].x + hx;
+            int c_dx = 0, f_dx = 0;
+
+            if (zaps[i].type == ZT_ROTATE) {
+                int shift = (rf % 60 < 30) ? (rf % 30) : (60 - (rf % 30));
+                shift = (shift * 12) / 30;
+                if (rf % 120 < 60) shift = -shift;
+                c_dx = shift; f_dx = -shift;
+            } else if (zaps[i].type == ZT_DIAG) {
+                c_dx = -6; f_dx = 6;
+            }
+
+            if (zaps[i].type != ZT_SINGLE || zaps[i].ceil_h > 0) {
+                int cb = zaps[i].ceil_bot + mo;
+                int ct = cb - zaps[i].ceil_h;
+                draw_rect(cx + c_dx, ct, zw, zaps[i].ceil_h, COL_ZAP_BODY);
+                draw_rect(cx + c_dx - 1, cb - 6, zw + 2, 6, COL_ZAP_TIP);
+                draw_rect(cx + c_dx + 2, cb - 14, 2, 6, COL_ZAP_GLOW);
+                draw_rect(cx + c_dx + zw - 4, cb - 14, 2, 6, COL_ZAP_GLOW);
+            }
+
+            if (zaps[i].type != ZT_SINGLE || zaps[i].floor_h > 0) {
+                int ft = zaps[i].floor_top + mo;
+                draw_rect(cx + f_dx, ft, zw, zaps[i].floor_h, COL_ZAP_BODY);
+                draw_rect(cx + f_dx - 1, ft, zw + 2, 6, COL_ZAP_TIP);
+                draw_rect(cx + f_dx + 2, ft + 8, 2, 6, COL_ZAP_GLOW);
+                draw_rect(cx + f_dx + zw - 4, ft + 8, 2, 6, COL_ZAP_GLOW);
+            }
+        }
+
+        /* Coins (diamond shape = circle approximation) */
+        for (int i = 0; i < MAX_COINS; i++) {
+            if (!coins[i].active) continue;
+            int cx = coins[i].x + COIN_SIZE/2;
+            int cy = coins[i].y + COIN_SIZE/2;
+            int r = COIN_SIZE/2;
+            for (int dy = -r; dy <= r; dy++) {
+                int half_w = r - abs(dy);
+                draw_rect(cx - half_w, cy + dy, half_w * 2, 1, COL_COIN);
+                if (dy > -r && dy < r)
+                    draw_rect(cx - half_w + 1, cy + dy, half_w * 2 - 2, 1, COL_COIN_SHINE);
+            }
+        }
+
+        /* Missiles + warnings */
+        for (int i = 0; i < MAX_MISSILES; i++) {
+            Missile *m = &missiles[i];
+            if (m->warning > 0) {
+                int blink = (m->warning / 5) % 2;
+                if (blink) {
+                    draw_rect(scr_w - 6, m->y - 2, 6, MISSILE_H + 4, COL_WARN);
+                    draw_rect(scr_w - 12, m->y + 2, 6, MISSILE_H - 4, COL_WARN);
+                }
+            }
+            if (m->active) {
+                draw_rect(m->x, m->y, MISSILE_W, MISSILE_H, COL_GAMEOVER);
+                draw_rect(m->x + 4, m->y + 2, MISSILE_W - 8, MISSILE_H - 4, 0xCC4444);
+                draw_rect(m->x + MISSILE_W - 6, m->y - 2, 6, MISSILE_H + 4, COL_SCORE);
+            }
         }
 
         /* Player */
@@ -364,6 +653,17 @@ void game_draw(void) {
         draw_text("SCORE:", 10, 10, 2, COL_TEXT);
         draw_text(sbuf, 10 + 6*6*2, 10, 2, COL_SCORE);
 
+        /* Coins display */
+        char cbuf[16];
+        int_to_str(coins_collected, cbuf, sizeof(cbuf));
+        draw_text("x", 12, 34, 1, COL_COIN);
+        draw_text(cbuf, 22, 34, 1, COL_COIN);
+        int ci = COIN_SIZE;
+        for (int dy = -ci/2; dy <= ci/2; dy++) {
+            int hw = ci/2 - abs(dy);
+            draw_rect(10 + ci/2 - hw, 34 + ci/2 + dy, hw*2, 1, COL_COIN);
+        }
+
         /* Speed indicator */
         char spdbuf[16];
         int_to_str(scroll_speed, spdbuf, sizeof(spdbuf));
@@ -378,8 +678,13 @@ void game_draw(void) {
 
         char sbuf[16];
         int_to_str(score, sbuf, sizeof(sbuf));
-        draw_text("SCORE:", scr_w/2 - 10*6*2/2, scr_h/2 - 20, 2, COL_TEXT);
-        draw_text(sbuf, scr_w/2 + 2*6*2, scr_h/2 - 20, 2, COL_SCORE);
+        draw_text("SCORE:", scr_w/2 - 10*6*2/2, scr_h/2 - 30, 2, COL_TEXT);
+        draw_text(sbuf, scr_w/2 + 2*6*2, scr_h/2 - 30, 2, COL_SCORE);
+
+        char cbuf[16];
+        int_to_str(coins_collected, cbuf, sizeof(cbuf));
+        draw_text("COINS:", scr_w/2 - 10*6*1/2, scr_h/2 - 2, 1, COL_TEXT);
+        draw_text(cbuf, scr_w/2 + 2*6*1, scr_h/2 - 2, 1, COL_COIN);
 
         draw_text("PRESS W TO RESTART", scr_w/2 - 18*6*1/2, scr_h/2 + 40, 1, COL_SCORE);
         draw_text("ESC TO QUIT", scr_w/2 - 11*6*1/2, scr_h/2 + 60, 1, COL_TEXT);
