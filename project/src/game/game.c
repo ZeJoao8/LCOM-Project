@@ -76,6 +76,13 @@ static int  difficulty_timer = 0;
 /* screen dimensions (from video_gr) */
 static int  scr_w, scr_h;
 
+/* ── Menu state ─────────────────────────────────────────────────────────── */
+#define MENU_ITEMS 3
+static int  menu_sel = 0;       /* 0=Play, 1=Instructions, 2=Quit */
+static int  mouse_x  = 0;       /* cursor X position */
+static int  mouse_y  = 0;       /* cursor Y position */
+static bool lb_prev  = false;   /* previous frame left-button state (edge detect) */
+
 /* ── Forward declarations ─────────────────────────────────────────────────── */
 static void reset_game(void);
 static void spawn_obstacle(void);
@@ -85,10 +92,14 @@ static void spawn_obstacle(void);
 game_state_t game_get_state(void) { return state; }
 
 void game_init(void) {
-    scr_w = h_res;
-    scr_h = v_res;
+    scr_w  = h_res;
+    scr_h  = v_res;
     state  = STATE_MENU;
-    srand(42); /* deterministic seed, fine for a game */
+    menu_sel = 0;
+    mouse_x  = scr_w / 2;
+    mouse_y  = scr_h / 2;
+    lb_prev  = false;
+    srand(42);
 }
 
 void game_cleanup(void) {
@@ -305,21 +316,96 @@ void game_draw(void) {
             draw_rect(sx, sy, 2, 2, COL_STAR);
         }
 
-        /* Title */
-        draw_text("JETPACK JOYRIDE", scr_w/2 - 15*6*3/2, scr_h/4, 3, COL_TITLE);
-
-        /* Subtitle */
-        draw_text("LCOM EDITION", scr_w/2 - 12*6*2/2, scr_h/4 + 40, 2, COL_TEXT);
-
-        /* Instructions */
-        draw_text("PRESS W OR SPACE TO START", scr_w/2 - 25*6*1/2, scr_h/2 + 40, 1, COL_SCORE);
-        draw_text("W TO FLY  ESC TO QUIT", scr_w/2 - 21*6*1/2, scr_h/2 + 70, 1, COL_TEXT);
-
         /* Animated player preview */
-        int preview_y = scr_h/2 - 30 + ((frame_count / 8) % 2 == 0 ? -5 : 5);
+        int preview_y = scr_h/4 - 30 + ((frame_count / 8) % 2 == 0 ? -5 : 5);
         draw_rect(scr_w/2 - PLAYER_W/2, preview_y, PLAYER_W, PLAYER_H, COL_PLAYER);
 
+        /* Title */
+        draw_text("JETPACK JOYRIDE", scr_w/2 - 15*6*3/2, scr_h/4 + 10, 3, COL_TITLE);
+        /* Subtitle */
+        draw_text("LCOM EDITION", scr_w/2 - 12*6*2/2, scr_h/4 + 55, 2, COL_TEXT);
+
+        /* ── Menu buttons ──────────────────────────────────────────────── */
+        const char *labels[MENU_ITEMS] = {"PLAY", "INSTRUCTIONS", "QUIT"};
+        int btn_w = 240;
+        int btn_h = 30;
+        int btn_x = scr_w/2 - btn_w/2;
+        int btn_start_y = scr_h/2 + 10;
+        int btn_gap = 50;
+
+        for (int i = 0; i < MENU_ITEMS; i++) {
+            int by = btn_start_y + i * btn_gap;
+
+            /* Hover detection: check if mouse cursor is inside this button */
+            bool hovered = (mouse_x >= btn_x && mouse_x <= btn_x + btn_w &&
+                            mouse_y >= by    && mouse_y <= by + btn_h);
+
+            /* Keyboard selection overrides hover highlight */
+            bool selected = (menu_sel == i) || hovered;
+            if (hovered) menu_sel = i; /* sync keyboard selection with mouse */
+
+            /* Button background */
+            uint32_t bg_col  = selected ? COL_TITLE   : 0x1A1A3A;
+            uint32_t txt_col = selected ? 0xFFFFFF    : COL_TEXT;
+            draw_rect(btn_x, by, btn_w, btn_h, bg_col);
+            /* Button border */
+            draw_rect(btn_x,          by,          btn_w, 2, COL_OBS_TOP);
+            draw_rect(btn_x,          by+btn_h-2,  btn_w, 2, COL_OBS_TOP);
+            draw_rect(btn_x,          by,          2, btn_h, COL_OBS_TOP);
+            draw_rect(btn_x+btn_w-2,  by,          2, btn_h, COL_OBS_TOP);
+
+            /* Centered label */
+            int llen = 0;
+            for (const char *p = labels[i]; *p; p++) llen++;
+            int lx = btn_x + (btn_w - llen * 6 * 2) / 2;
+            int ly = by + (btn_h - 7*2) / 2;
+            draw_text(labels[i], lx, ly, 2, txt_col);
+        }
+
+        /* Mouse cursor — small crosshair */
+        draw_rect(mouse_x - 5, mouse_y,     11, 2, COL_SCORE);
+        draw_rect(mouse_x,     mouse_y - 5, 2, 11, COL_SCORE);
+
         frame_count++;
+    }
+    else if (state == STATE_INSTRUCTIONS) {
+        /* ── INSTRUCTIONS SCREEN ──────────────────────────────────────── */
+        clear_buffer(COL_MENU_BG);
+
+        draw_text("INSTRUCTIONS", scr_w/2 - 12*6*3/2, 40, 3, COL_TITLE);
+
+        /* Instructions text */
+        const char *lines[] = {
+            "GOAL: FLY AS FAR AS POSSIBLE",
+            "AVOID ALL OBSTACLES",
+            "W OR SPACE - FLY UP",
+            "RELEASE  - FALL DOWN",
+            "ESC - QUIT THE GAME",
+            "SPEED INCREASES OVER TIME",
+        };
+        int nlines = 6;
+        for (int i = 0; i < nlines; i++) {
+            draw_text(lines[i], scr_w/2 - 30*6/2, 140 + i * 40, 1, COL_TEXT);
+        }
+
+        /* BACK button */
+        int bbw = 140, bbh = 28;
+        int bbx = scr_w/2 - bbw/2;
+        int bby = scr_h - 80;
+        bool bb_hov = (mouse_x >= bbx && mouse_x <= bbx + bbw &&
+                       mouse_y >= bby && mouse_y <= bby + bbh);
+        uint32_t bb_bg  = bb_hov ? COL_TITLE : 0x1A1A3A;
+        uint32_t bb_txt = bb_hov ? 0xFFFFFF  : COL_TEXT;
+        draw_rect(bbx, bby, bbw, bbh, bb_bg);
+        draw_rect(bbx,       bby,         bbw, 2, COL_OBS_TOP);
+        draw_rect(bbx,       bby+bbh-2,   bbw, 2, COL_OBS_TOP);
+        draw_rect(bbx,       bby,         2, bbh, COL_OBS_TOP);
+        draw_rect(bbx+bbw-2, bby,         2, bbh, COL_OBS_TOP);
+        draw_text("BACK", bbx + (bbw - 4*6*2)/2, bby + (bbh - 7*2)/2, 2, bb_txt);
+
+        /* Mouse cursor */
+        draw_rect(mouse_x - 5, mouse_y,     11, 2, COL_SCORE);
+        draw_rect(mouse_x,     mouse_y - 5, 2, 11, COL_SCORE);
     }
     else if (state == STATE_PLAYING) {
         /* ── GAME SCREEN ──────────────────────────────────────────────── */
@@ -381,8 +467,26 @@ void game_draw(void) {
         draw_text("SCORE:", scr_w/2 - 10*6*2/2, scr_h/2 - 20, 2, COL_TEXT);
         draw_text(sbuf, scr_w/2 + 2*6*2, scr_h/2 - 20, 2, COL_SCORE);
 
-        draw_text("PRESS W TO RESTART", scr_w/2 - 18*6*1/2, scr_h/2 + 40, 1, COL_SCORE);
-        draw_text("ESC TO QUIT", scr_w/2 - 11*6*1/2, scr_h/2 + 60, 1, COL_TEXT);
+        draw_text("PRESS W OR CLICK TO RESTART", scr_w/2 - 27*6*1/2, scr_h/2 + 30, 1, COL_SCORE);
+
+        /* BACK button */
+        int bbw = 140, bbh = 28;
+        int bbx = scr_w/2 - bbw/2;
+        int bby = scr_h - 80;
+        bool bb_hov = (mouse_x >= bbx && mouse_x <= bbx + bbw &&
+                       mouse_y >= bby && mouse_y <= bby + bbh);
+        uint32_t bb_bg  = bb_hov ? COL_TITLE : 0x1A1A3A;
+        uint32_t bb_txt = bb_hov ? 0xFFFFFF  : COL_TEXT;
+        draw_rect(bbx, bby, bbw, bbh, bb_bg);
+        draw_rect(bbx,       bby,         bbw, 2, COL_OBS_TOP);
+        draw_rect(bbx,       bby+bbh-2,   bbw, 2, COL_OBS_TOP);
+        draw_rect(bbx,       bby,         2, bbh, COL_OBS_TOP);
+        draw_rect(bbx+bbw-2, bby,         2, bbh, COL_OBS_TOP);
+        draw_text("BACK", bbx + (bbw - 4*6*2)/2, bby + (bbh - 7*2)/2, 2, bb_txt);
+
+        /* Mouse cursor */
+        draw_rect(mouse_x - 5, mouse_y,     11, 2, COL_SCORE);
+        draw_rect(mouse_x,     mouse_y - 5, 2, 11, COL_SCORE);
     }
 
     /* Always swap to VRAM */
@@ -392,29 +496,45 @@ void game_draw(void) {
 /* ═══════════════════ KEYBOARD INPUT ══════════════════════════════════════ */
 
 void game_handle_kbd(uint8_t scancode) {
-    /* ESC always quits */
-    if (scancode == ESC_MAKE || scancode == 0x81) {
-        state = STATE_EXIT;
-        return;
-    }
+    /* Arrow key scancodes */
+    #define UP_MAKE   0x48
+    #define DOWN_MAKE 0x50
 
     switch (state) {
         case STATE_MENU:
-            if (scancode == W_MAKE || scancode == SPACE_MAKE || scancode == ENTER_MAKE) {
-                reset_game();
-                state = STATE_PLAYING;
+            if (scancode == ESC_MAKE) {
+                state = STATE_EXIT;
+            } else if (scancode == UP_MAKE) {
+                menu_sel = (menu_sel - 1 + MENU_ITEMS) % MENU_ITEMS;
+            } else if (scancode == DOWN_MAKE) {
+                menu_sel = (menu_sel + 1) % MENU_ITEMS;
+            } else if (scancode == ENTER_MAKE || scancode == SPACE_MAKE) {
+                if (menu_sel == 0) { reset_game(); state = STATE_PLAYING; }
+                else if (menu_sel == 1) { state = STATE_INSTRUCTIONS; }
+                else if (menu_sel == 2) { state = STATE_EXIT; }
             }
             break;
 
+        case STATE_INSTRUCTIONS:
+            /* Only ESC goes back to menu; other keys ignored */
+            if (scancode == ESC_MAKE)
+                state = STATE_MENU;
+            break;
+
         case STATE_PLAYING:
-            if (scancode == W_MAKE || scancode == SPACE_MAKE)
+            if (scancode == ESC_MAKE) {
+                state = STATE_MENU; /* pause/back to menu */
+            } else if (scancode == W_MAKE || scancode == SPACE_MAKE) {
                 player.thrusting = true;
-            else if (scancode == W_BREAK || scancode == SPACE_BREAK)
+            } else if (scancode == W_BREAK || scancode == SPACE_BREAK) {
                 player.thrusting = false;
+            }
             break;
 
         case STATE_GAMEOVER:
-            if (scancode == W_MAKE || scancode == SPACE_MAKE || scancode == ENTER_MAKE) {
+            if (scancode == ESC_MAKE) {
+                state = STATE_MENU;
+            } else if (scancode == W_MAKE || scancode == SPACE_MAKE || scancode == ENTER_MAKE) {
                 reset_game();
                 state = STATE_PLAYING;
             }
@@ -422,5 +542,70 @@ void game_handle_kbd(uint8_t scancode) {
 
         default:
             break;
+    }
+}
+
+/* ═══════════════════ MOUSE INPUT ════════════════════════════════════════ */
+
+void game_handle_mouse(int16_t dx, int16_t dy, bool lb_pressed) {
+    /* Update cursor position, clamped to screen */
+    mouse_x += dx;
+    mouse_y -= dy; /* Y is inverted: mouse up = negative dy = up on screen */
+    if (mouse_x < 0)       mouse_x = 0;
+    if (mouse_x >= scr_w)  mouse_x = scr_w - 1;
+    if (mouse_y < 0)       mouse_y = 0;
+    if (mouse_y >= scr_h)  mouse_y = scr_h - 1;
+
+    /* During gameplay, left button controls thrust (hold = fly, release = fall) */
+    if (state == STATE_PLAYING) {
+        player.thrusting = lb_pressed;
+    }
+
+    /* Edge detection: only act on the press (not the hold) for menu clicks */
+    bool clicked = lb_pressed && !lb_prev;
+    lb_prev = lb_pressed;
+
+    if (!clicked) return;
+
+    if (state == STATE_MENU) {
+        int btn_w = 240, btn_h = 30;
+        int btn_x = scr_w/2 - btn_w/2;
+        int btn_start_y = scr_h/2 + 10;
+        int btn_gap = 50;
+
+        for (int i = 0; i < MENU_ITEMS; i++) {
+            int by = btn_start_y + i * btn_gap;
+            if (mouse_x >= btn_x && mouse_x <= btn_x + btn_w &&
+                mouse_y >= by    && mouse_y <= by + btn_h) {
+                if (i == 0) { reset_game(); state = STATE_PLAYING; }
+                else if (i == 1) { state = STATE_INSTRUCTIONS; }
+                else if (i == 2) { state = STATE_EXIT; }
+                return;
+            }
+        }
+    }
+    else if (state == STATE_INSTRUCTIONS) {
+        /* BACK button */
+        int bbw = 140, bbh = 28;
+        int bbx = scr_w/2 - bbw/2;
+        int bby = scr_h - 80;
+        if (mouse_x >= bbx && mouse_x <= bbx + bbw &&
+            mouse_y >= bby && mouse_y <= bby + bbh) {
+            state = STATE_MENU;
+        }
+    }
+    else if (state == STATE_GAMEOVER) {
+        /* BACK button goes to menu */
+        int bbw = 140, bbh = 28;
+        int bbx = scr_w/2 - bbw/2;
+        int bby = scr_h - 80;
+        if (mouse_x >= bbx && mouse_x <= bbx + bbw &&
+            mouse_y >= bby && mouse_y <= bby + bbh) {
+            state = STATE_MENU;
+        } else {
+            /* Click anywhere else restarts */
+            reset_game();
+            state = STATE_PLAYING;
+        }
     }
 }
