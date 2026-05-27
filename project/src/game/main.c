@@ -90,6 +90,11 @@ int (proj_main_loop)(int argc, char *argv[]) {
                     if (packet_byte_idx == 3) {
                         mouse_parse_packet();
                         packet_byte_idx = 0;
+                        game_handle_mouse(
+                            mouse_packet.delta_x,
+                            mouse_packet.delta_y,
+                            mouse_packet.lb
+                        );
                     }
                 }
             }
