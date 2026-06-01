@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include "devices/video_gr.h"
 
-/* ── Module globals ──────────────────────────────────────────────────────── */
+/* Globais do módulo */
 void    *video_mem      = NULL;
 uint8_t *double_buffer  = NULL;
 uint16_t h_res          = 0;
@@ -13,11 +13,10 @@ static uint8_t  bytes_pp        = 0;
 
 static uint32_t vram_size = 0;
 
-/* ── vg_init ─────────────────────────────────────────────────────────────── */
-/* Overrides the weak symbol in liblcf.a                                     */
+/* vg_init — substitui o símbolo weak da liblcf.a */
 
 void *vg_init(uint16_t mode) {
-    /* 1. Get mode info via LCF vbe_get_mode_info() */
+    /* 1. Obter info do modo via vbe_get_mode_info() */
     vbe_mode_info_t info;
     if (vbe_get_mode_info(mode, &info) != 0) {
         printf("vg_init: vbe_get_mode_info failed\n");
@@ -29,7 +28,7 @@ void *vg_init(uint16_t mode) {
     bits_per_pixel = info.BitsPerPixel;
     vram_size      = (uint32_t) v_res * info.BytesPerScanLine;
 
-    /* 2. Map VRAM into process address space (BEFORE set mode - LCF rule) */
+    /* 2. Mapear VRAM no espaço de endereços (ANTES do set mode - regra LCF) */
     struct minix_mem_range mr;
     mr.mr_base  = info.PhysBasePtr;
     mr.mr_limit = mr.mr_base + vram_size;
@@ -46,7 +45,7 @@ void *vg_init(uint16_t mode) {
         return NULL;
     }
 
-    /* 3. Set VBE mode with Linear Frame Buffer (BIT(14)) */
+    /* 3. Ativar modo VBE com Linear Frame Buffer (BIT(14)) */
     reg86_t reg;
     memset(&reg, 0, sizeof(reg));
     reg.intno = 0x10;
@@ -75,7 +74,7 @@ void *vg_init(uint16_t mode) {
     return video_mem;
 }
 
-/* ── vg_draw_pixel ───────────────────────────────────────────────────────── */
+/* vg_draw_pixel */
 
 int vg_draw_pixel(uint16_t x, uint16_t y, uint32_t color) {
     if (x >= h_res || y >= v_res)
@@ -90,8 +89,7 @@ int vg_draw_pixel(uint16_t x, uint16_t y, uint32_t color) {
     return 0;
 }
 
-/* ── vg_draw_hline ───────────────────────────────────────────────────────── */
-/* Overrides the weak symbol in liblcf.a                                     */
+/* vg_draw_hline — substitui o símbolo weak da liblcf.a */
 
 int vg_draw_hline(uint16_t x, uint16_t y, uint16_t len, uint32_t color) {
     for (uint16_t col = x; col < x + len; col++)
@@ -100,8 +98,7 @@ int vg_draw_hline(uint16_t x, uint16_t y, uint16_t len, uint32_t color) {
     return 0;
 }
 
-/* ── vg_draw_rectangle ───────────────────────────────────────────────────── */
-/* Overrides the weak symbol in liblcf.a                                     */
+/* vg_draw_rectangle — substitui o símbolo weak da liblcf.a */
 
 int vg_draw_rectangle(uint16_t x, uint16_t y, uint16_t width,
                       uint16_t height, uint32_t color) {
@@ -111,22 +108,44 @@ int vg_draw_rectangle(uint16_t x, uint16_t y, uint16_t width,
     return 0;
 }
 
-/* ── vg_draw_pixmap ──────────────────────────────────────────────────────── */
+/* vg_draw_pixmap — blit com transparência para modos de cor direta.
+ * O pixmap tem de ser carregado com xpm_load() num formato direto (ex: XPM_8_8_8).
+ * Pixels iguais à cor magenta (0xFF00FF) são tratados como transparentes;
+ * pixels fora do ecrã são cortados silenciosamente em vez de abortar o desenho. */
+
+#define XPM_TRANSPARENT 0xFF00FFu
 
 int vg_draw_pixmap(uint8_t *pixmap, xpm_image_t img, uint16_t x, uint16_t y) {
     if (pixmap == NULL)
         return 1;
 
-    for (uint16_t row = 0; row < (uint16_t) img.height; row++)
+    uint8_t bpp;
+    switch (img.type) {
+        case XPM_INDEXED:               bpp = 1; break;
+        case XPM_1_5_5_5:
+        case XPM_5_6_5:                 bpp = 2; break;
+        case XPM_8_8_8:                 bpp = 3; break;
+        case XPM_8_8_8_8:               bpp = 4; break;
+        default:                        bpp = bytes_pp; break;
+    }
+
+    for (uint16_t row = 0; row < (uint16_t) img.height; row++) {
         for (uint16_t col = 0; col < (uint16_t) img.width; col++) {
-            uint32_t color = pixmap[(uint32_t) row * img.width + col];
-            if (vg_draw_pixel(x + col, y + row, color) != 0)
-                return 1;
+            const uint8_t *px = pixmap + ((uint32_t) row * img.width + col) * bpp;
+            uint32_t color = 0;
+            for (uint8_t b = 0; b < bpp; b++)
+                color |= (uint32_t) px[b] << (8 * b);
+
+            if (color == XPM_TRANSPARENT)
+                continue;
+            /* vg_draw_pixel corta pixels fora dos limites ao retornar não-zero */
+            vg_draw_pixel((uint16_t)(x + col), (uint16_t)(y + row), color);
         }
+    }
     return 0;
 }
 
-/* ── Double buffering utilities ──────────────────────────────────────────── */
+/* Utilitários de double buffering */
 
 void clear_buffer(uint32_t color) {
     uint8_t *p = double_buffer;
