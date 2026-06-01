@@ -1,9 +1,7 @@
-// IMPORTANT: you must include the following line in all your C files
 #include <lcom/lcf.h>
 #include <stdint.h>
 #include <stdio.h>
 
-// Include your device headers
 #include <lcom/timer.h>
 #include "devices/kbc.h"
 #include "devices/mouse.h"
@@ -11,10 +9,9 @@
 #include "devices/i8042.h"
 #include "devices/i8254.h"
 
-// Game header
 #include "game/game.h"
 
-// External variables from your drivers
+/* Variáveis externas dos drivers */
 extern uint8_t scancode;
 extern uint8_t packet_byte_idx;
 extern bool mouse_error;
@@ -30,28 +27,26 @@ int main(int argc, char *argv[]) {
 int (proj_main_loop)(int argc, char *argv[]) {
     uint8_t timer_bit_no, kbd_bit_no, mouse_bit_no;
 
-    // =======================================================
-    // 1. HARDWARE INITIALIZATION
-    // =======================================================
+    /* 1. INICIALIZAÇÃO DO HARDWARE */
     
-    // Start Video Mode (800x600x24 Direct Color)
+    /* Iniciar modo vídeo (800x600x24 Direct Color) */
     if (vg_init(0x115) == NULL) {
         printf("Error: Failed to initialize video!\n");
         return 1;
     }
     
-    // Initialize game state
+    /* Inicializar estado do jogo */
     game_init();
 
-    // Enable mouse data reporting BEFORE subscribing
+    /* Ativar envio de dados do rato ANTES de subscrever */
     if (mouse_write_cmd(MOUSE_ENABLE_DATA_REP) != 0) return 1;
 
-    // Subscribe to all interrupts
+    /* Subscrever todas as interrupções */
     if (timer_subscribe_int(&timer_bit_no) != 0) return 1;
     if (kbd_subscribe_int(&kbd_bit_no) != 0) return 1;
     if (mouse_subscribe_int(&mouse_bit_no) != 0) return 1;
 
-    // Create IRQ masks
+    /* Criar máscaras IRQ */
     uint32_t timer_irq = BIT(timer_bit_no);
     uint32_t kbd_irq = BIT(kbd_bit_no);
     uint32_t mouse_irq = BIT(mouse_bit_no);
@@ -59,9 +54,7 @@ int (proj_main_loop)(int argc, char *argv[]) {
     int ipc_status;
     message msg;
 
-    // =======================================================
-    // 2. MAIN GAME LOOP
-    // =======================================================
+    /* 2. LOOP PRINCIPAL DO JOGO */
     while (game_get_state() != STATE_EXIT) {
         if (driver_receive(ANY, &msg, &ipc_status) != 0) continue;
 
