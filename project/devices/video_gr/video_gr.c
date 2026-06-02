@@ -1,7 +1,7 @@
 #include <lcom/lcf.h>
 #include <string.h>
 #include <stdlib.h>
-#include "devices/video_gr.h"
+#include "devices/video_gr/video_gr.h"
 
 /* Globais do módulo */
 void    *video_mem      = NULL;

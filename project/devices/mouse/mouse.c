@@ -1,7 +1,7 @@
-#include "devices/mouse.h"
-#include "devices/i8042.h"
-#include "devices/kbc.h"
-#include "devices/utils.h"
+#include "devices/mouse/mouse.h"
+#include "devices/kbc/i8042.h"
+#include "devices/kbc/kbc.h"
+#include "devices/utils/utils.h"
 #include <lcom/lcf.h>
 #include <stdint.h>
 

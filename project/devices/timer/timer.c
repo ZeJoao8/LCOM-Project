@@ -3,7 +3,7 @@
 #include <minix/syslib.h>
 #include <stdint.h>
 
-#include "devices/i8254.h"
+#include "devices/timer/i8254.h"
 int timer_counter = 0; 
 int hook_id_timer = 0;
 

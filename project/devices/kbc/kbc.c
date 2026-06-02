@@ -1,7 +1,9 @@
-#include "devices/kbc.h"
-#include "devices/i8042.h"
-#include "devices/utils.h"
+#include "devices/kbc/kbc.h"
+#include "devices/kbc/i8042.h"
+#include "devices/utils/utils.h"
 #include <lcom/lcf.h>
+
+#define KBC_MAX_RETRIES 20   /* polling attempts before giving up on the KBC */
 
 int kbd_hook_id = 1;
 uint8_t scancode = 0;
@@ -47,7 +49,7 @@ void(kbc_ih)() {
 
 int kbc_read_data(uint8_t *data) {
   uint8_t status;
-  int retries = 20;
+  int retries = KBC_MAX_RETRIES;
 
   while (retries > 0) {
     if (util_sys_inb(KBC_ST_REG, &status) == 0) {
@@ -68,7 +70,7 @@ int kbc_read_data(uint8_t *data) {
 
 int kbc_issue_cmd(uint8_t cmd) {
   uint8_t status;
-  int retries = 20;
+  int retries = KBC_MAX_RETRIES;
 
   while (retries > 0) {
     if (util_sys_inb(KBC_ST_REG, &status) == 0) {
@@ -97,7 +99,7 @@ int kbc_write_cmd_byte(uint8_t cmd) {
     return 1;
 
   uint8_t status;
-  int retries = 20;
+  int retries = KBC_MAX_RETRIES;
 
   while (retries > 0) {
     if (util_sys_inb(KBC_ST_REG, &status) == 0) {
