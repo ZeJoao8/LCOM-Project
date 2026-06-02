@@ -6,8 +6,8 @@ SRCS = main.c timer.c kbc.c mouse.c video_gr.c utils.c rtc.c serial.c \
 
 # 2. Tell the MINIX make tool where to look for these .c files
 .PATH.c: ./src ./src/game ./include/game \
-         ./devices/kbc ./devices/mouse ./devices/rtc ./devices/serial \
-         ./devices/timer ./devices/utils ./devices/video_gr
+         ./src/devices/kbc ./src/devices/mouse ./src/devices/rtc ./src/devices/serial \
+         ./src/devices/timer ./src/devices/utils ./src/devices/video_gr
 
 # 3. Compiler flags
 CFLAGS += -pedantic
