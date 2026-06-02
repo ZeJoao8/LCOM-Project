@@ -37,9 +37,16 @@ static void menu_activate(GameModel *m, int idx) {
 }
 
 void controller_handle_kbd(GameModel *m, uint8_t scancode) {
-    /* ESC quits the program from any screen (standard LCOM behaviour). */
-    if (scancode == ESC_MAKE || scancode == ESC_BREAK) {
-        m->state = STATE_EXIT;
+    /* ESC returns to main menu from any screen; if already on menu, it exits the game. */
+    if (scancode == ESC_MAKE) {
+        if (m->state == STATE_MENU) {
+            m->state = STATE_EXIT;
+        } else {
+            m->state = STATE_MENU;
+        }
+        return;
+    }
+    if (scancode == ESC_BREAK) {
         return;
     }
 
