@@ -12,10 +12,10 @@
 #include <stdbool.h>
 
 /* ── Physics ──────────────────────────────────────────────────────────────── */
-#define GRAVITY        2     /* downward acceleration per frame                */
-#define THRUST        -5     /* upward acceleration while the jetpack is on    */
-#define MAX_VY        13     /* terminal velocity falling                      */
-#define MIN_VY       -13     /* terminal velocity rising                       */
+#define GRAVITY        1     /* downward acceleration per frame                */
+#define THRUST        -3     /* upward acceleration while the jetpack is on    */
+#define MAX_VY         6     /* terminal velocity falling                      */
+#define MIN_VY        -6     /* terminal velocity rising                       */
 
 /* ── Player / layout ──────────────────────────────────────────────────────── */
 #define PLAYER_SCALE   1
@@ -55,7 +55,7 @@
 #define MISSILE_H    (8  * MISSILE_SCALE)   /* 16 */
 #define MISSILE_W    (20 * MISSILE_SCALE)   /* 40 */
 #define MISSILE_WARN  50     /* warning frames before a missile spawns          */
-#define MISSILE_SPEED 16
+#define MISSILE_SPEED  8
 
 /* ── Particles / popups (juice) ───────────────────────────────────────────── */
 #define MAX_PARTS     48
@@ -89,10 +89,10 @@
 #endif
 
 /* ── Difficulty / scoring ─────────────────────────────────────────────────── */
-#define SCROLL_SPEED_MENU    3   /* idle scroll speed on menus                  */
-#define SCROLL_SPEED_START   4   /* scroll speed at the start of a run          */
-#define SCROLL_SPEED_MAX    14   /* cap                                         */
-#define DIFFICULTY_INTERVAL 220  /* frames between speed bumps                  */
+#define SCROLL_SPEED_MENU    2   /* idle scroll speed on menus                  */
+#define SCROLL_SPEED_START   3   /* scroll speed at the start of a run          */
+#define SCROLL_SPEED_MAX     9   /* cap                                         */
+#define DIFFICULTY_INTERVAL 300  /* frames between speed bumps                  */
 #define SPAWN_INTERVAL_MIN   20  /* floor on the zapper spawn interval          */
 #define SCORE_DIST_DIV        6  /* distance score = frame_count / this         */
 #define SCORE_PER_COIN       10
