@@ -342,7 +342,6 @@ void model_update(GameModel *m) {
             if (mi->warning == 0) {
                 mi->active = 1;
                 mi->x = m->scr_w;
-                mi->y = 30 + (rand() % (m->scr_h - FLOOR_H - 60));
                 mi->speed = MISSILE_SPEED + (m->scroll_speed / 2);
             }
         }
