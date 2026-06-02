@@ -1,7 +1,6 @@
 #ifndef _GAME_H_
 #define _GAME_H_
 
-#include <lcom/lcf.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -10,6 +9,7 @@ typedef enum {
     STATE_MENU,
     STATE_INSTRUCTIONS,
     STATE_PLAYING,
+    STATE_PAUSE,
     STATE_GAMEOVER,
     STATE_EXIT
 } game_state_t;
@@ -20,6 +20,7 @@ void game_update(void);
 void game_draw(void);
 void game_handle_kbd(uint8_t scancode);
 void game_handle_mouse(int16_t dx, int16_t dy, bool lb_pressed);
+void game_on_rtc(void);   /* refresh the on-screen clock (called on RTC IRQ) */
 void game_cleanup(void);
 
 game_state_t game_get_state(void);
