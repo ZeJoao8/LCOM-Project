@@ -31,6 +31,13 @@ static uint16_t clamp16(int v) {
 void net_tick(GameModel *m) {
     if (!m->versus) return;
 
+    /* If the peer has gone quiet for too long (cable pulled, crash), treat it
+     * as out so the round can resolve instead of waiting forever. */
+    if (m->opp_alive && m->state != STATE_MENU) {
+        if (++m->net_silence > NET_PEER_TIMEOUT)
+            m->opp_alive = false;
+    }
+
     static int send_ctr = 0;
     if (m->state == STATE_PLAYING) {
         if (++send_ctr >= NET_SEND_INTERVAL) {
@@ -50,6 +57,7 @@ void net_tick(GameModel *m) {
 
 /* ── Receive (frame parser) ───────────────────────────────────────────────── */
 static void net_apply(GameModel *m, uint8_t type, const uint8_t *p) {
+    m->net_silence = 0;                 /* a valid frame just arrived */
     if (type == NET_STATE) {
         m->opp_y     = (p[0] << 8) | p[1];
         m->opp_score = (p[2] << 8) | p[3];

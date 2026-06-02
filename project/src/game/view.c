@@ -114,6 +114,12 @@ static void draw_text(const char *str, int x, int y, int s, uint32_t color) {
     }
 }
 
+/* Text with a 1-unit drop shadow, so it stays legible over the busy backdrop. */
+static void draw_text_sh(const char *str, int x, int y, int s, uint32_t color) {
+    draw_text(str, x + s, y + s, s, COL_SHADOW);
+    draw_text(str, x,     y,     s, color);
+}
+
 /* Convert an integer to a string. */
 static void int_to_str(int val, char *buf, int bufsz) {
     if (bufsz < 2) return;
@@ -289,6 +295,13 @@ static void draw_text_c(const char *s, int cx, int y, int scale, uint32_t col) {
     draw_text(s, cx - n * 6 * scale / 2, y, scale, col);
 }
 
+/* Centred text with a drop shadow. */
+static void draw_text_c_sh(const char *s, int cx, int y, int scale, uint32_t col) {
+    int n = 0;
+    for (const char *p = s; *p; p++) n++;
+    draw_text_sh(s, cx - n * 6 * scale / 2, y, scale, col);
+}
+
 /* Translucent-looking cyan silhouette of the 2-player opponent. */
 static void draw_ghost(int y) {
     for (int row = 0; row < PLAYER_H; row += 2)        /* scanline fill = "ghosted" */
@@ -298,6 +311,80 @@ static void draw_ghost(int y) {
     draw_rect(PLAYER_X, y, 1, PLAYER_H, COL_TEXT);
     draw_rect(PLAYER_X + PLAYER_W - 1, y, 1, PLAYER_H, COL_TEXT);
     draw_text("P2", PLAYER_X + 2, y - 12, 1, COL_GHOST);
+}
+
+/* Linear interpolate two 24-bit colours, t in [0,255]. */
+static uint32_t lerp_col(uint32_t a, uint32_t b, int t) {
+    int ra=(a>>16)&0xFF, ga=(a>>8)&0xFF, ba=a&0xFF;
+    int rb=(b>>16)&0xFF, gb=(b>>8)&0xFF, bb=b&0xFF;
+    int r = ra + (rb - ra) * t / 255;
+    int g = ga + (gb - ga) * t / 255;
+    int bl= ba + (bb - ba) * t / 255;
+    return ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)bl;
+}
+
+/* One wrapping row of building silhouettes, scrolled by @p scroll px. */
+static void draw_skyline(int scroll, int height_from_floor, int max_h, uint32_t col) {
+    int bw = 46;                                    /* width slot per building   */
+    int base_y = scr_h - FLOOR_H - height_from_floor;
+    int n = scr_w / bw + 2;
+    int sh = ((scroll % bw) + bw) % bw;
+    for (int i = 0; i < n; i++) {
+        int idx = i + scroll / bw;
+        unsigned hsh = (unsigned) idx * 2654435761u; /* cheap deterministic hash */
+        int bh = 24 + (int)(hsh % (unsigned) max_h);
+        int x = i * bw - sh;
+        draw_rect(x, base_y - bh, bw - 6, bh + height_from_floor, col);
+        unsigned w = hsh;                            /* lit windows */
+        for (int wy = base_y - bh + 6; wy < base_y - 4; wy += 13) {
+            for (int wx = x + 5; wx < x + bw - 11; wx += 11) {
+                w = w * 1103515245u + 12345u;
+                if (w & 0x40000u) draw_rect(wx, wy, 3, 4, COL_STAR);
+            }
+        }
+    }
+}
+
+/* Procedural parallax backdrop: sky gradient, stars, two scrolling skylines. */
+static void draw_parallax(void) {
+    int sky_h = scr_h - FLOOR_H;
+    int bands = 8;
+    for (int b = 0; b < bands; b++) {
+        uint32_t col = lerp_col(COL_SKY_TOP, COL_SKY_BOT, b * 255 / (bands - 1));
+        draw_rect(0, b * sky_h / bands, scr_w, sky_h / bands + 1, col);
+    }
+    for (int i = 0; i < 40; i++) {                  /* stars, gentle drift */
+        int sx = (i * 97 + M->anim / 3) % scr_w;
+        int sy = (i * 61) % (sky_h / 2);
+        draw_rect(sx, sy, 1, 1, COL_STAR);
+    }
+    draw_skyline(M->anim / 3, 140, 60,  COL_CITY_FAR);   /* far: short, slow */
+    draw_skyline(M->anim,      60, 130, COL_CITY_NEAR);  /* near: tall, fast */
+}
+
+/* A floating power-up: glowing diamond tagged S (shield) or M (magnet). */
+static void draw_powerup(const PowerUp *pu) {
+    uint32_t col = (pu->type == PU_SHIELD) ? COL_SHIELD : COL_MAGNET;
+    int cx = pu->x + PU_SIZE / 2;
+    int cy = pu->y + PU_SIZE / 2 + (isin(M->anim * 4) * 3) / 1024;  /* bob */
+    int r  = PU_SIZE / 2;
+    for (int dy = -r; dy <= r; dy++) {              /* diamond */
+        int hw = r - abs(dy);
+        draw_rect(cx - hw, cy + dy, 2 * hw, 1, col);
+    }
+    draw_rect(cx - 2, cy - 2, 4, 4, COL_TEXT);      /* bright centre */
+    draw_char((pu->type == PU_SHIELD) ? 'S' : 'M', cx - 2, cy - 3, 1, COL_SHADOW);
+}
+
+/* Pulsing ring drawn around the player while the shield is active. */
+static void draw_shield_aura(int px, int py) {
+    int cx = px + PLAYER_W / 2, cy = py + PLAYER_H / 2;
+    int r  = PLAYER_H / 2 + 6 + (isin(M->anim * 6) * 3) / 1024;
+    for (int dy = -r; dy <= r; dy++) {
+        int hw = isqrt_i(r * r - dy * dy);
+        draw_rect(cx - hw, cy + dy, 1, 1, COL_SHIELD);      /* left arc  */
+        draw_rect(cx + hw, cy + dy, 1, 1, COL_SHIELD);      /* right arc */
+    }
 }
 
 /* ── Per-state screens ────────────────────────────────────────────────────── */
@@ -321,7 +408,7 @@ static void render_menu(void) {
     else
         draw_rect(scr_w/2 - PLAYER_W/2, preview_y, PLAYER_W, PLAYER_H, COL_PLAYER);
 
-    draw_text("JETPACK JOYRIDE", scr_w/2 - 15*6*3/2, scr_h/4 + 10, 3, COL_TITLE);
+    draw_text_sh("JETPACK JOYRIDE", scr_w/2 - 15*6*3/2, scr_h/4 + 10, 3, COL_TITLE);
     draw_text("LCOM EDITION", scr_w/2 - 12*6*2/2, scr_h/4 + 55, 2, COL_TEXT);
 
     /* Session best score */
@@ -346,13 +433,29 @@ static void render_menu(void) {
         draw_text(M->date_str,  scr_w - 8*6 - 12, 24, 1, COL_STAR);
     }
 
+    /* Persistent leaderboard (left column, loaded from disk) */
+    if (M->high_count > 0) {
+        int lx = 24, ly = scr_h/2 - 6;
+        draw_text("BEST RUNS", lx, ly, 1, COL_TITLE);
+        for (int i = 0; i < M->high_count; i++) {
+            uint32_t rc = (i == M->last_rank) ? COL_SCORE : COL_TEXT;
+            char num[8], sc[12];
+            int_to_str(i + 1, num, sizeof(num));
+            int_to_str(M->high_scores[i].score, sc, sizeof(sc));
+            int ry = ly + 16 + i * 12;
+            draw_text(num, lx, ry, 1, rc);
+            draw_text(sc,  lx + 18, ry, 1, rc);
+            draw_text(M->high_scores[i].when, lx + 18 + 7*6, ry, 1, COL_STAR);
+        }
+    }
+
     draw_cursor();
 }
 
 static void render_instructions(void) {
     clear_buffer(COL_MENU_BG);
 
-    draw_text("INSTRUCTIONS", scr_w/2 - 12*6*3/2, 40, 3, COL_TITLE);
+    draw_text_sh("INSTRUCTIONS", scr_w/2 - 12*6*3/2, 40, 3, COL_TITLE);
 
     const char *lines[] = {
         "GOAL: FLY AS FAR AS POSSIBLE",
@@ -361,9 +464,10 @@ static void render_instructions(void) {
         "RELEASE - FALL DOWN",
         "P - PAUSE      ESC - QUIT",
         "SPEED INCREASES OVER TIME",
+        "GRAB S-SHIELD AND M-MAGNET POWER-UPS",
         "2-PLAYER RACES OVER THE SERIAL PORT",
     };
-    int nlines = 7;
+    int nlines = 8;
     for (int i = 0; i < nlines; i++)
         draw_text(lines[i], scr_w/2 - 30*6/2, 140 + i * 40, 1, COL_TEXT);
 
@@ -375,19 +479,11 @@ static void render_instructions(void) {
 }
 
 static void render_playing(void) {
-    clear_buffer(COL_BG);
+    draw_parallax();                 /* sky gradient + scrolling skylines */
 
     /* Floor + floor line */
     draw_rect(0, scr_h - FLOOR_H, scr_w, FLOOR_H, COL_FLOOR);
     draw_rect(0, scr_h - FLOOR_H, scr_w, 2, COL_ZAP_TIP);
-
-    /* Parallax background dots */
-    for (int i = 0; i < 30; i++) {
-        int px = (i * 137 - M->anim) % scr_w;
-        if (px < 0) px += scr_w;
-        int py = (i * 53) % (scr_h - FLOOR_H);
-        draw_rect(px, py, 1, 1, 0x333355);
-    }
 
     /* Zappers */
     for (int i = 0; i < MAX_ZAPPERS; i++)
@@ -412,6 +508,10 @@ static void render_playing(void) {
             }
         }
     }
+
+    /* Power-ups */
+    for (int i = 0; i < MAX_POWERUPS; i++)
+        if (M->powerups[i].active) draw_powerup(&M->powerups[i]);
 
     /* Missiles + warnings */
     for (int i = 0; i < MAX_MISSILES; i++) {
@@ -438,6 +538,10 @@ static void render_playing(void) {
     /* Opponent ghost (2-player) — drawn behind the local player */
     if (M->versus && M->opp_alive)
         draw_ghost(M->opp_y);
+
+    /* Shield aura behind the player while invulnerable */
+    if (M->shield_timer > 0)
+        draw_shield_aura(PLAYER_X, M->player.y);
 
     /* Jetpack flame behind the player */
     if (M->player.thrusting)
@@ -480,6 +584,20 @@ static void render_playing(void) {
     draw_text("SPD:", scr_w - 120, 10, 1, COL_TEXT);
     draw_text(spdbuf, scr_w - 80, 10, 1, COL_SCORE);
 
+    /* HUD: active power-ups, with whole seconds remaining */
+    int hud_y = 26;
+    if (M->shield_timer > 0) {
+        char t[8]; int_to_str((M->shield_timer + 59) / 60, t, sizeof(t));
+        draw_text("SHIELD", scr_w - 120, hud_y, 1, COL_SHIELD);
+        draw_text(t, scr_w - 120 + 7 * 6, hud_y, 1, COL_SHIELD);
+        hud_y += 14;
+    }
+    if (M->magnet_timer > 0) {
+        char t[8]; int_to_str((M->magnet_timer + 59) / 60, t, sizeof(t));
+        draw_text("MAGNET", scr_w - 120, hud_y, 1, COL_MAGNET);
+        draw_text(t, scr_w - 120 + 7 * 6, hud_y, 1, COL_MAGNET);
+    }
+
     /* HUD: opponent score (2-player) */
     if (M->versus) {
         char p2[16];
@@ -496,7 +614,16 @@ static void render_gameover(void) {
 
     draw_particles();
 
-    draw_text("GAME OVER", scr_w/2 - 9*6*4/2, scr_h/4, 4, COL_GAMEOVER);
+    draw_text_sh("GAME OVER", scr_w/2 - 9*6*4/2, scr_h/4, 4, COL_GAMEOVER);
+
+    /* Made the persistent leaderboard this run? */
+    if (!M->versus && M->last_rank >= 0) {
+        draw_text_c_sh("NEW HIGH SCORE!", scr_w/2, scr_h/4 + 44, 2, COL_SCORE);
+        char rk[8];
+        int_to_str(M->last_rank + 1, rk, sizeof(rk));
+        draw_text("RANK", scr_w/2 - 18, scr_h/4 + 68, 1, COL_SCORE);
+        draw_text(rk, scr_w/2 + 14, scr_h/4 + 68, 1, COL_SCORE);
+    }
 
     char sbuf[16];
     int_to_str(M->score, sbuf, sizeof(sbuf));
@@ -551,7 +678,7 @@ static void render_pause(void) {
     render_playing();
     for (int y = 0; y < scr_h; y += 2)          /* venetian dim over the scene */
         draw_rect(0, y, scr_w, 1, COL_MENU_BG);
-    draw_text_c("PAUSED", scr_w/2, scr_h/2 - 24, 4, COL_TITLE);
+    draw_text_c_sh("PAUSED", scr_w/2, scr_h/2 - 24, 4, COL_TITLE);
     draw_text_c("PRESS P TO RESUME", scr_w/2, scr_h/2 + 24, 1, COL_TEXT);
 }
 

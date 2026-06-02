@@ -14,7 +14,7 @@ All six devices studied in the course are exercised:
 | **Keyboard (KBC)** | thrust (`W`/`SPACE`), menu navigation, pause, quit |
 | **Mouse (PS/2)** | menu cursor + clicks, hold-to-thrust during play |
 | **Graphics (VBE 0x115)** | 800×600, 24-bit, linear frame buffer + double buffering |
-| **RTC (MC146818)** | live on-screen date/time, 1 Hz update interrupt, RNG seed |
+| **RTC (MC146818)** | live date/time, 1 Hz update interrupt, RNG seed, high-score timestamps |
 | **Serial port (UART 16550)** | interrupt-driven link for the 2-player race |
 
 ## Controls
@@ -79,7 +79,27 @@ SYNC(0xA5) TYPE B0 B1 B2 B3 CHK     CHK = TYPE ^ B0 ^ B1 ^ B2 ^ B3
   TYPE_DEAD  (2): B0:B1 = final score               (sent once on death)
 ```
 
+## Power-ups
+
+Two timed pickups float in from the right (5 s each):
+
+- **S — Shield**: temporary invulnerability; absorbs a zapper touch and destroys
+  any missile that hits you. A pulsing cyan ring shows it is active.
+- **M — Magnet**: nearby coins are pulled toward the player.
+
+## Persistent leaderboard
+
+The best runs are saved to disk with their **RTC date/time** and shown on the
+menu and on the game-over screen (with the rank earned). The file path is
+`SCORES_PATH` in `include/game/config.h` (default `/home/lcom/jetpack_scores.txt`)
+— change it to a writable location on your VM if needed.
+
 ## Notes
 
 - The RNG is seeded from the RTC, so the obstacle course differs each launch.
+- The background (sky gradient + scrolling city skylines) is drawn procedurally,
+  not from image assets.
+- The serial driver counts line-status errors and RX-ring overflows, and the
+  2-player link drops a silent peer after a timeout so a pulled cable can't hang
+  the round.
 - `core.*`, `proj` and object files are git-ignored.

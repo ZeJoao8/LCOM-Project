@@ -55,6 +55,19 @@ typedef struct {
     int x, y, life, active;
 } Popup;
 
+/** Floating power-up pickup; scrolls left like the other obstacles. */
+typedef struct {
+    int  x, y;
+    bool active;
+    int  type;   /* PU_SHIELD, PU_MAGNET */
+} PowerUp;
+
+/** One leaderboard row: a score and when it was achieved (from the RTC). */
+typedef struct {
+    int  score;
+    char when[SCORE_WHEN_LEN];   /* "DD/MM/YY HH:MM" */
+} ScoreEntry;
+
 /**
  * Whole game state. A single instance lives in game.c; the model mutates it,
  * the view reads it (const), the controller feeds input into it.
@@ -68,12 +81,18 @@ typedef struct {
     Missile  missiles[MAX_MISSILES];
     Particle parts[MAX_PARTS];
     Popup    popups[MAX_POPUPS];
+    PowerUp  powerups[MAX_POWERUPS];
 
     int hit_flash;            /* red flash frames after a hit                  */
     int scroll_speed;
     int score;
     int coins_collected;
     int high_score;           /* best score this session                      */
+
+    /* Active power-up effects (remaining frames; 0 = inactive) */
+    int shield_timer;
+    int magnet_timer;
+    int powerup_timer;        /* cadence counter for spawning power-ups        */
 
     int frame_count;          /* advances only while PLAYING (distance/score)  */
     int anim;                 /* advances every frame (menus + animations)     */
@@ -98,6 +117,12 @@ typedef struct {
     int  opp_y;           /* opponent's reported vertical position     */
     int  opp_score;       /* opponent's reported score                 */
     bool dead_sent;       /* our DEAD packet already sent this round   */
+    int  net_silence;     /* frames since the last packet from the peer */
+
+    /* Persistent leaderboard (loaded/saved by the glue layer). */
+    ScoreEntry high_scores[MAX_SCORES];
+    int        high_count;    /* number of valid entries in high_scores  */
+    int        last_rank;     /* rank (0-based) this run earned, or -1   */
 } GameModel;
 
 #endif /* _GAME_ENTITIES_H_ */

@@ -72,7 +72,7 @@ static void spawn_popup(GameModel *m, int x, int y) {
     for (int i = 0; i < MAX_POPUPS; i++) {
         if (!m->popups[i].active) {
             m->popups[i].x = x; m->popups[i].y = y;
-            m->popups[i].life = 36; m->popups[i].active = 1;
+            m->popups[i].life = POPUP_LIFE; m->popups[i].active = 1;
             return;
         }
     }
@@ -101,9 +101,9 @@ static void update_particles(GameModel *m) {
 /* Player death: explosion + red flash, then game over. */
 static void player_explode(GameModel *m) {
     int cx = PLAYER_X + PLAYER_W / 2, cy = m->player.y + PLAYER_H / 2;
-    burst(m, cx, cy, 24, COL_GAMEOVER);
-    burst(m, cx, cy, 12, COL_SCORE);
-    burst(m, cx, cy,  8, 0xFF8800);
+    burst(m, cx, cy, EXPLODE_BURST_RED,  COL_GAMEOVER);
+    burst(m, cx, cy, EXPLODE_BURST_GOLD, COL_SCORE);
+    burst(m, cx, cy, EXPLODE_BURST_FIRE, 0xFF8800);
     m->hit_flash = 8;
     if (m->score > m->high_score) m->high_score = m->score;
     m->state = STATE_GAMEOVER;
@@ -114,7 +114,7 @@ static void spawn_coins(GameModel *m, int cx, int band_lo, int band_hi, int patt
     if (band_hi - band_lo < COIN_SIZE) return;        /* corridor too tight */
 
     int cy    = (band_lo + band_hi) / 2;
-    int count = 3 + (rand() % 4);                     /* 3-6 coins */
+    int count = COIN_ROW_MIN + (rand() % COIN_ROW_VAR);   /* 3-6 coins */
     int span  = (count - 1) * COIN_STEP;
     int placed = 0;
     for (int i = 0; i < MAX_COINS && placed < count; i++) {
@@ -181,6 +181,19 @@ static void spawn_zapper(GameModel *m) {
     }
 }
 
+/* Spawn one floating power-up from the right edge, inside the playable band. */
+static void spawn_powerup(GameModel *m) {
+    for (int i = 0; i < MAX_POWERUPS; i++) {
+        if (m->powerups[i].active) continue;
+        int pf = m->scr_h - FLOOR_H;
+        m->powerups[i].active = true;
+        m->powerups[i].type   = rand() % PU_TYPES;
+        m->powerups[i].x      = m->scr_w + PU_SIZE;
+        m->powerups[i].y      = 30 + (rand() % (pf - 60 - PU_SIZE));
+        return;
+    }
+}
+
 /* ── Public API ───────────────────────────────────────────────────────────── */
 
 void model_init(GameModel *m, int scr_w, int scr_h, unsigned seed) {
@@ -203,8 +216,15 @@ void model_init(GameModel *m, int scr_w, int scr_h, unsigned seed) {
     m->opp_y = scr_h / 2;
     m->opp_score = 0;
     m->dead_sent = false;
-    for (int i = 0; i < MAX_PARTS; i++)  m->parts[i].active  = 0;
-    for (int i = 0; i < MAX_POPUPS; i++) m->popups[i].active = 0;
+    m->net_silence = 0;
+    m->shield_timer = 0;
+    m->magnet_timer = 0;
+    m->powerup_timer = 0;
+    m->high_count = 0;        /* the glue layer loads the saved table */
+    m->last_rank = -1;
+    for (int i = 0; i < MAX_PARTS; i++)    m->parts[i].active    = 0;
+    for (int i = 0; i < MAX_POPUPS; i++)   m->popups[i].active   = 0;
+    for (int i = 0; i < MAX_POWERUPS; i++) m->powerups[i].active = false;
     srand(seed);
 }
 
@@ -218,6 +238,7 @@ void model_reset(GameModel *m) {
     for (int i = 0; i < MAX_MISSILES; i++) m->missiles[i].active = 0;
     for (int i = 0; i < MAX_PARTS; i++)    m->parts[i].active    = 0;
     for (int i = 0; i < MAX_POPUPS; i++)   m->popups[i].active   = 0;
+    for (int i = 0; i < MAX_POWERUPS; i++) m->powerups[i].active = false;
     m->hit_flash = 0;
 
     m->scroll_speed = SCROLL_SPEED_START;
@@ -227,12 +248,17 @@ void model_reset(GameModel *m) {
     m->spawn_timer = 0;
     m->missile_timer = 0;
     m->difficulty_timer = 0;
+    m->shield_timer = 0;
+    m->magnet_timer = 0;
+    m->powerup_timer = 0;
+    m->last_rank = -1;
 
     /* Opponent state for this round (versus flag is set by the controller). */
     m->opp_alive = true;
     m->opp_y = m->scr_h / 2;
     m->opp_score = 0;
     m->dead_sent = false;
+    m->net_silence = 0;
 }
 
 void model_update(GameModel *m) {
@@ -241,6 +267,10 @@ void model_update(GameModel *m) {
     if (m->state != STATE_PLAYING) return;
 
     m->frame_count++;
+
+    /* Power-up effect timers tick down */
+    if (m->shield_timer > 0) m->shield_timer--;
+    if (m->magnet_timer > 0) m->magnet_timer--;
 
     /* Player physics */
     if (m->player.thrusting) m->player.vy += THRUST;
@@ -277,6 +307,19 @@ void model_update(GameModel *m) {
         if (!m->coins[i].active) continue;
         m->coins[i].x -= m->scroll_speed;
         if (m->coins[i].x + COIN_SIZE < 0) { m->coins[i].active = false; continue; }
+
+        /* Magnet power-up: drag nearby coins toward the player. */
+        if (m->magnet_timer > 0) {
+            int pcx = PLAYER_X + PLAYER_W / 2, pcy = m->player.y + PLAYER_H / 2;
+            int ccx0 = m->coins[i].x + COIN_SIZE / 2, ccy0 = m->coins[i].y + COIN_SIZE / 2;
+            int ddx = pcx - ccx0, ddy = pcy - ccy0;
+            if ((long)ddx * ddx + (long)ddy * ddy < (long)MAGNET_RANGE * MAGNET_RANGE) {
+                int sx = (ddx > 0) ? 1 : -1, sy = (ddy > 0) ? 1 : -1;
+                int ax = abs(ddx), ay = abs(ddy);
+                m->coins[i].x += sx * (ax < MAGNET_PULL ? ax : MAGNET_PULL);
+                m->coins[i].y += sy * (ay < MAGNET_PULL ? ay : MAGNET_PULL);
+            }
+        }
 
         int ccx = m->coins[i].x + COIN_SIZE / 2;
         int ccy = m->coins[i].y + COIN_SIZE / 2;
@@ -340,10 +383,35 @@ void model_update(GameModel *m) {
             m->coins[i].active = false;
             m->coins_collected++;
             int ccx = m->coins[i].x + COIN_SIZE / 2, ccy = m->coins[i].y + COIN_SIZE / 2;
-            for (int p = 0; p < 5; p++)
+            for (int p = 0; p < COIN_PICK_PARTS; p++)
                 spawn_particle(m, ccx, ccy, (rand() % 9) - 4, (rand() % 7) - 5,
                                10 + rand() % 8, COL_COIN_SHINE);
             spawn_popup(m, m->coins[i].x, m->coins[i].y - 6);
+        }
+    }
+
+    /* Power-ups: spawn on a cadence, scroll left, collect on overlap */
+    m->powerup_timer++;
+    if (m->powerup_timer >= POWERUP_INTERVAL) {
+        m->powerup_timer = 0;
+        spawn_powerup(m);
+    }
+    for (int i = 0; i < MAX_POWERUPS; i++) {
+        PowerUp *pu = &m->powerups[i];
+        if (!pu->active) continue;
+        pu->x -= m->scroll_speed;
+        if (pu->x + PU_SIZE < 0) { pu->active = false; continue; }
+
+        if (PLAYER_X + PLAYER_W > pu->x && PLAYER_X < pu->x + PU_SIZE &&
+            m->player.y + PLAYER_H > pu->y && m->player.y < pu->y + PU_SIZE) {
+            if (pu->type == PU_SHIELD) m->shield_timer = PU_DURATION;
+            else                        m->magnet_timer = PU_DURATION;
+            uint32_t col = (pu->type == PU_SHIELD) ? COL_SHIELD : COL_MAGNET;
+            int pcx = pu->x + PU_SIZE / 2, pcy = pu->y + PU_SIZE / 2;
+            for (int p = 0; p < 10; p++)
+                spawn_particle(m, pcx, pcy, (rand() % 11) - 5, (rand() % 11) - 5,
+                               12 + rand() % 8, col);
+            pu->active = false;
         }
     }
 
@@ -357,20 +425,29 @@ void model_update(GameModel *m) {
         m->difficulty_timer = 0;
     }
 
-    /* Collision: zappers (point-to-beam distance) */
+    /* Collision: zappers (point-to-beam distance). Shield absorbs the hit. */
     for (int i = 0; i < MAX_ZAPPERS; i++) {
         if (!m->zaps[i].active) continue;
-        if (zap_hits_player(m, &m->zaps[i])) { player_explode(m); return; }
+        if (zap_hits_player(m, &m->zaps[i])) {
+            if (m->shield_timer > 0) break;          /* invulnerable: shrug it off */
+            player_explode(m); return;
+        }
     }
 
-    /* Collision: missiles */
+    /* Collision: missiles. Shield destroys the missile instead of the player. */
     for (int i = 0; i < MAX_MISSILES; i++) {
         if (!m->missiles[i].active) continue;
         Missile *mi = &m->missiles[i];
         if (PLAYER_X + PLAYER_W > mi->x &&
             PLAYER_X < mi->x + MISSILE_W &&
             m->player.y + PLAYER_H > mi->y &&
-            m->player.y < mi->y + MISSILE_H)
-            { player_explode(m); return; }
+            m->player.y < mi->y + MISSILE_H) {
+            if (m->shield_timer > 0) {
+                mi->active = 0;
+                burst(m, mi->x, mi->y + MISSILE_H / 2, EXPLODE_BURST_FIRE, COL_SHIELD);
+                continue;
+            }
+            player_explode(m); return;
+        }
     }
 }

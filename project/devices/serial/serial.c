@@ -24,6 +24,7 @@
 /* IER */
 #define IER_RDA   0x01   /* received-data-available interrupt */
 #define IER_THRE  0x02   /* transmitter-holding-empty interrupt */
+#define IER_LS    0x04   /* receiver line-status interrupt */
 /* IIR */
 #define IIR_NO_INT 0x01
 #define IIR_ID    0x0E
@@ -33,7 +34,12 @@
 #define IIR_TIMEOUT 0x0C
 /* LSR */
 #define LSR_RXRDY 0x01
+#define LSR_OE    0x02   /* overrun error  */
+#define LSR_PE    0x04   /* parity error   */
+#define LSR_FE    0x08   /* framing error  */
+#define LSR_BI    0x10   /* break interrupt*/
 #define LSR_THRE  0x20
+#define LSR_ERR   (LSR_OE | LSR_PE | LSR_FE | LSR_BI)
 /* FCR */
 #define FCR_ENABLE 0x01
 #define FCR_CLR_RX 0x02
@@ -45,6 +51,7 @@
 #define MCR_OUT2  0x08   /* gates UART interrupts onto the PC IRQ line */
 
 #define SER_IRQ   4
+#define SER_HOOK_ID 5    /* keep distinct from timer/kbd/mouse/rtc hooks */
 #define BAUD_DIV  1      /* 115200 baud (115200 / 1) */
 
 #define RING 256
@@ -53,7 +60,11 @@ static volatile uint8_t tx_buf[RING];
 static volatile int rx_head = 0, rx_tail = 0;
 static volatile int tx_head = 0, tx_tail = 0;
 
-static int serial_hook_id = 5;
+/* Diagnostics: counted in the ISR, never block the data path. */
+static volatile int rx_dropped = 0;   /* bytes lost to a full RX ring   */
+static volatile int line_errors = 0;  /* LSR overrun/framing/parity/break */
+
+static int serial_hook_id = SER_HOOK_ID;
 
 /* ── Ring helpers ─────────────────────────────────────────────────────────── */
 static bool rx_empty(void) { return rx_head == rx_tail; }
@@ -61,7 +72,8 @@ static bool tx_empty(void) { return tx_head == tx_tail; }
 
 static void rx_push(uint8_t b) {
     int n = (rx_head + 1) % RING;
-    if (n != rx_tail) { rx_buf[rx_head] = b; rx_head = n; }   /* drop on overflow */
+    if (n != rx_tail) { rx_buf[rx_head] = b; rx_head = n; }
+    else rx_dropped++;                                         /* ring full: count the loss */
 }
 static int rx_pop(void) {
     if (rx_empty()) return -1;
@@ -121,9 +133,10 @@ int serial_config(void) {
     ser_out(SER_MCR, MCR_DTR | MCR_RTS | MCR_OUT2);
 
     rx_head = rx_tail = tx_head = tx_tail = 0;
+    rx_dropped = line_errors = 0;
 
-    /* Enable the received-data-available interrupt. */
-    ser_out(SER_IER, IER_RDA);
+    /* Enable received-data-available and line-status (error) interrupts. */
+    ser_out(SER_IER, IER_RDA | IER_LS);
     return 0;
 }
 
@@ -133,17 +146,21 @@ void serial_ih(void) {
         uint8_t id = iir & IIR_ID;
 
         if (id == IIR_RDA || id == IIR_TIMEOUT) {       /* data to read */
-            while (ser_in(SER_LSR) & LSR_RXRDY)
-                rx_push(ser_in(SER_RBR));
+            uint8_t lsr;
+            while ((lsr = ser_in(SER_LSR)) & LSR_RXRDY) {
+                uint8_t byte = ser_in(SER_RBR);         /* reading RBR clears the error */
+                if (lsr & LSR_ERR) line_errors++;       /* corrupt byte: drop it */
+                else rx_push(byte);
+            }
         }
         else if (id == IIR_THRE) {                      /* room to write */
             while (!tx_empty() && (ser_in(SER_LSR) & LSR_THRE))
                 ser_out(SER_THR, (uint8_t) tx_pop());
             if (tx_empty())
-                ser_out(SER_IER, IER_RDA);              /* stop asking for THRE */
+                ser_out(SER_IER, IER_RDA | IER_LS);     /* stop asking for THRE */
         }
         else if (id == IIR_LS) {
-            (void) ser_in(SER_LSR);                     /* clear line-status */
+            if (ser_in(SER_LSR) & LSR_ERR) line_errors++;   /* read clears the status */
         }
         else {
             (void) ser_in(SER_RBR);                     /* clear anything else */
@@ -153,7 +170,7 @@ void serial_ih(void) {
 
 int serial_putc(uint8_t byte) {
     if (!tx_push(byte)) return 1;
-    ser_out(SER_IER, IER_RDA | IER_THRE);   /* ask to be told when THR empties */
+    ser_out(SER_IER, IER_RDA | IER_LS | IER_THRE);   /* tell me when THR empties */
     return 0;
 }
 
@@ -164,3 +181,6 @@ int serial_getc(void) {
 bool serial_available(void) {
     return !rx_empty();
 }
+
+int serial_rx_dropped(void) { return rx_dropped; }
+int serial_line_errors(void) { return line_errors; }

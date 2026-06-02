@@ -60,6 +60,33 @@
 /* ── Particles / popups (juice) ───────────────────────────────────────────── */
 #define MAX_PARTS     48
 #define MAX_POPUPS     6
+#define EXPLODE_BURST_RED    24   /* explosion: red shrapnel particles  */
+#define EXPLODE_BURST_GOLD   12   /* explosion: gold particles          */
+#define EXPLODE_BURST_FIRE    8   /* explosion: orange embers           */
+#define COIN_PICK_PARTS       5   /* sparkles spawned per coin picked    */
+#define POPUP_LIFE           36   /* frames a "+10" popup lives          */
+
+/* ── Coin rows (how many coins a spawn drops) ─────────────────────────────── */
+#define COIN_ROW_MIN          3   /* fewest coins in a row               */
+#define COIN_ROW_VAR          4   /* extra coins: rand() % COIN_ROW_VAR  */
+
+/* ── Power-ups (floating pickups with a timed effect) ─────────────────────── */
+#define MAX_POWERUPS          2
+#define PU_SHIELD             0   /* temporary invulnerability           */
+#define PU_MAGNET             1   /* pulls nearby coins to the player    */
+#define PU_TYPES              2
+#define PU_SIZE              20   /* pickup hitbox / sprite size (px)     */
+#define PU_DURATION         300   /* effect length in frames (~5 s)      */
+#define POWERUP_INTERVAL    560   /* frames between power-up spawns       */
+#define MAGNET_RANGE        150   /* magnet pull radius (px)             */
+#define MAGNET_PULL           5   /* px a coin moves toward player/frame  */
+
+/* ── Persistent high-score table (RTC-timestamped, saved to disk) ─────────── */
+#define MAX_SCORES            5   /* leaderboard entries kept            */
+#define SCORE_WHEN_LEN       20   /* "DD/MM/YY HH:MM" + NUL              */
+#ifndef SCORES_PATH
+#define SCORES_PATH "/home/lcom/jetpack_scores.txt"  /* change for your VM */
+#endif
 
 /* ── Difficulty / scoring ─────────────────────────────────────────────────── */
 #define SCROLL_SPEED_MENU    3   /* idle scroll speed on menus                  */
@@ -90,9 +117,19 @@
 #define COL_BTN_BG     0x1A1A3A  /* idle button background */
 #define COL_BTN_HI     0xFFFFFF  /* highlighted text       */
 #define COL_GHOST      0x3CC8FF  /* opponent ghost (2-player) */
+#define COL_SHIELD     0x33CCFF  /* shield power-up + aura */
+#define COL_MAGNET     0xC061FF  /* magnet power-up */
+#define COL_SHADOW     0x0A0A12  /* text drop-shadow */
+
+/* Parallax background layers (drawn procedurally, no image assets). */
+#define COL_SKY_TOP    0x141430  /* top sky band   */
+#define COL_SKY_BOT    0x2A2350  /* horizon band   */
+#define COL_CITY_FAR   0x1E1E3C  /* distant skyline */
+#define COL_CITY_NEAR  0x12203A  /* nearer skyline  */
 
 /* ── Netplay (serial 2-player) ────────────────────────────────────────────── */
 #define NET_SEND_INTERVAL 3      /* frames between state broadcasts */
+#define NET_PEER_TIMEOUT 240     /* frames without a packet => peer is "out" */
 
 /* ── Menu / button geometry ───────────────────────────────────────────────── */
 #define MENU_ITEMS          4

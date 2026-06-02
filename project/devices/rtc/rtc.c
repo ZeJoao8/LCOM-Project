@@ -30,8 +30,9 @@
 #define RTC_UF    (1 << 4)   /* reg C: update-ended interrupt flag     */
 
 #define RTC_IRQ      8
+#define RTC_HOOK_ID  3       /* keep distinct from timer/kbd/mouse/serial hooks */
 
-static int rtc_hook_id = 3;
+static int rtc_hook_id = RTC_HOOK_ID;
 
 static int bcd_to_bin(uint8_t bcd) {
     return ((bcd >> 4) * 10) + (bcd & 0x0F);

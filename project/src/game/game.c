@@ -11,6 +11,7 @@
 #include "game/view.h"
 #include "game/controller.h"
 #include "game/net.h"
+#include "game/scores.h"
 #include "devices/video_gr/video_gr.h"   /* h_res, v_res */
 #include "devices/rtc/rtc.h"
 
@@ -19,6 +20,7 @@ static GameModel M;
 
 void game_init(void) {
     model_init(&M, h_res, v_res, rtc_seed());   /* logic + RNG seeded by RTC */
+    scores_load(M.high_scores, &M.high_count, MAX_SCORES);  /* persistent leaderboard */
     view_init();                                /* load sprites (mode already set) */
     game_on_rtc();                              /* prime the clock immediately */
 }
@@ -37,9 +39,24 @@ void game_cleanup(void) {
 }
 
 void game_update(void) {
+    static game_state_t prev = STATE_MENU;
+
     model_update(&M);
     net_poll(&M);    /* apply any opponent packets that arrived */
     net_tick(&M);    /* broadcast our state in 2-player mode    */
+
+    /* On entering game-over from a solo run, persist the score with the RTC
+     * timestamp captured for this run. */
+    if (M.state == STATE_GAMEOVER && prev != STATE_GAMEOVER && !M.versus) {
+        char when[SCORE_WHEN_LEN];
+        snprintf(when, sizeof(when), "%s %s",
+                 M.date_str[0]  ? M.date_str  : "--/--/--",
+                 M.clock_str[0] ? M.clock_str : "--:--:--");
+        M.last_rank = scores_insert(M.high_scores, &M.high_count,
+                                    MAX_SCORES, M.score, when);
+        if (M.last_rank >= 0) scores_save(M.high_scores, M.high_count);
+    }
+    prev = M.state;
 }
 
 void game_draw(void) {

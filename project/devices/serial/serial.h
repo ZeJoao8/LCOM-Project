@@ -32,4 +32,10 @@ int serial_getc(void);
 /** True if there is at least one received byte waiting. */
 bool serial_available(void);
 
+/** Number of received bytes dropped because the RX ring was full. */
+int serial_rx_dropped(void);
+
+/** Number of UART line-status errors (overrun/parity/framing/break) seen. */
+int serial_line_errors(void);
+
 #endif /* _SERIAL_H_ */
