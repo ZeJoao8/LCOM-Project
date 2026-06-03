@@ -77,7 +77,7 @@
 #define PU_TYPES              2
 #define PU_SIZE              20   /* pickup hitbox / sprite size (px)     */
 #define PU_DURATION         300   /* effect length in frames (~5 s)      */
-#define POWERUP_INTERVAL    560   /* frames between power-up spawns       */
+#define POWERUP_INTERVAL    250   /* frames between power-up spawns       */
 #define MAGNET_RANGE        150   /* magnet pull radius (px)             */
 #define MAGNET_PULL           5   /* px a coin moves toward player/frame  */
 
@@ -85,7 +85,7 @@
 #define MAX_SCORES            5   /* leaderboard entries kept            */
 #define SCORE_WHEN_LEN       20   /* "DD/MM/YY HH:MM" + NUL              */
 #ifndef SCORES_PATH
-#define SCORES_PATH "/home/lcom/jetpack_scores.txt"  /* change for your VM */
+#define SCORES_PATH "/home/lcom/labs/project/data/jetpack_scores.txt"  /* change for your VM */
 #endif
 
 /* ── Difficulty / scoring ─────────────────────────────────────────────────── */
