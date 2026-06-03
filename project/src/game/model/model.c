@@ -108,7 +108,7 @@ void model_update(GameModel *m) {
     for (int i = 0; i < MAX_ZAPPERS; i++) {
         if (!m->zaps[i].active) continue;
         m->zaps[i].cx -= m->scroll_speed;
-        if (m->zaps[i].spin)
+        if (m->zaps[i].spin && (m->frame_count % 3 == 0))
             m->zaps[i].ang = (m->zaps[i].ang + m->zaps[i].spin) % ANG_STEPS;
         if (m->zaps[i].cx + m->zaps[i].half < -20) m->zaps[i].active = false;
     }
