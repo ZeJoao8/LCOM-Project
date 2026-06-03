@@ -134,3 +134,15 @@ uint32_t lerp_col(uint32_t a, uint32_t b, int t) {
     int bl= ba + (bb - ba) * t / 255;
     return ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)bl;
 }
+
+/* Darken the whole frame toward black by scaling every colour byte. Works on any
+ * direct-colour layout since each channel byte is scaled independently. t is the
+ * surviving brightness: 0 = full black, 255 = unchanged (fast path). */
+void fade_buffer(int t) {
+    if (t >= 255) return;
+    if (t < 0) t = 0;
+    uint32_t n = (uint32_t) h_res * v_res * ((bits_per_pixel + 7) / 8);
+    uint8_t *p = double_buffer;
+    for (uint32_t i = 0; i < n; i++)
+        p[i] = (uint8_t) ((p[i] * t) / 255);
+}

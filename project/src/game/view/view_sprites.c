@@ -17,6 +17,8 @@
 #include "coin3.xpm"
 #include "missile.xpm"
 #include "instructions.xpm"
+#include "shield.xpm"
+#include "magnet.xpm"
 
 /* Sprites owned by the view (declared extern in view_internal.h). */
 bool        sprites_ok = false;
@@ -28,6 +30,10 @@ uint8_t    *missile_pix = NULL;
 xpm_image_t missile_img;
 uint8_t    *instructions_pix = NULL;
 xpm_image_t instructions_img;
+uint8_t    *shield_pix = NULL;
+xpm_image_t shield_img;
+uint8_t    *magnet_pix = NULL;
+xpm_image_t magnet_img;
 
 void view_init(void) {
     player_pix  = xpm_load((xpm_map_t) player_xpm,  XPM_8_8_8, &player_img);
@@ -37,6 +43,8 @@ void view_init(void) {
     coin_pix[3] = xpm_load((xpm_map_t) coin_xpm3,   XPM_8_8_8, &coin_img[3]);
     missile_pix = xpm_load((xpm_map_t) missile_xpm, XPM_8_8_8, &missile_img);
     instructions_pix = xpm_load((xpm_map_t) instructions_xpm, XPM_8_8_8, &instructions_img);
+    shield_pix  = xpm_load((xpm_map_t) shield_xpm,  XPM_8_8_8, &shield_img);
+    magnet_pix  = xpm_load((xpm_map_t) magnet_xpm,  XPM_8_8_8, &magnet_img);
 
     sprites_ok = (player_pix && missile_pix &&
                   coin_pix[0] && coin_pix[1] && coin_pix[2] && coin_pix[3]);

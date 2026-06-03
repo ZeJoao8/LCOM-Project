@@ -63,7 +63,7 @@
 #define EXPLODE_BURST_RED    24   /* explosion: red shrapnel particles  */
 #define EXPLODE_BURST_GOLD   12   /* explosion: gold particles          */
 #define EXPLODE_BURST_FIRE    8   /* explosion: orange embers           */
-#define COIN_PICK_PARTS       5   /* sparkles spawned per coin picked    */
+#define COIN_PICK_PARTS       8   /* sparkles spawned per coin picked    */
 #define POPUP_LIFE           36   /* frames a "+10" popup lives          */
 
 /* ── Coin rows (how many coins a spawn drops) ─────────────────────────────── */
@@ -126,6 +126,18 @@
 #define COL_SKY_BOT    0x2A2350  /* horizon band   */
 #define COL_CITY_FAR   0x1E1E3C  /* distant skyline */
 #define COL_CITY_NEAR  0x12203A  /* nearer skyline  */
+#define COL_CITY_FORE  0x0C1426  /* closest skyline (darkest, fastest) */
+#define COL_MOON       0xF4F1D7  /* moon disc          */
+#define COL_MOON_GLOW  0x3A3A5E  /* soft halo + craters */
+#define COL_CLOUD      0x232348  /* drifting clouds    */
+
+/* Ground + motion cues (sense of speed). */
+#define COL_FLOOR_SEAM 0x0E1730  /* vertical seams between floor tiles */
+#define COL_FLOOR_DASH 0x24345C  /* scrolling hazard dashes on the floor */
+
+/* ── Transitions / motion ─────────────────────────────────────────────────── */
+#define FADE_FRAMES    12        /* fade-in length (frames) on a state change   */
+#define FLOOR_TILE     48        /* width of one scrolling floor tile (px)      */
 
 /* ── Netplay (serial 2-player) ────────────────────────────────────────────── */
 #define NET_SEND_INTERVAL 3      /* frames between state broadcasts */

@@ -7,6 +7,20 @@
 #include "game/view_internal.h"
 #include "game/model.h"           /* isin / icos / zap_endpoints */
 
+/* Scrolling ground: solid base, bright lip, plus seams and hazard dashes that
+ * slide left at the world speed (g_scroll_x) to sell a sense of motion. */
+void draw_floor(void) {
+    int top = scr_h - FLOOR_H;
+    draw_rect(0, top, scr_w, FLOOR_H, COL_FLOOR);
+    draw_rect(0, top, scr_w, 2, COL_ZAP_TIP);          /* bright top lip */
+
+    int off = ((g_scroll_x % FLOOR_TILE) + FLOOR_TILE) % FLOOR_TILE;
+    for (int x = -off; x < scr_w; x += FLOOR_TILE) {
+        draw_rect(x, top + 2, 2, FLOOR_H - 2, COL_FLOOR_SEAM);      /* tile seam   */
+        draw_rect(x + 6, top + 5, FLOOR_TILE / 2, 3, COL_FLOOR_DASH); /* hazard dash */
+    }
+}
+
 /* Draw all live particles and score popups. */
 void draw_particles(void) {
     for (int i = 0; i < MAX_PARTS; i++)
@@ -71,11 +85,19 @@ void draw_flame(int x, int y) {
     draw_rect(x + 3,  y + f + f/2,  4, 3,     COL_GAMEOVER);  /* red tip */
 }
 
-/* A floating power-up: glowing diamond tagged S (shield) or M (magnet). */
+/* A floating power-up: a shield or magnet sprite, gently bobbing. Falls back to
+ * a glowing diamond tagged S/M if the sprites failed to load. */
 void draw_powerup(const PowerUp *pu) {
+    int bob = (isin(M->anim * 4) * 3) / 1024;
+    uint8_t    *pix = (pu->type == PU_SHIELD) ? shield_pix : magnet_pix;
+    xpm_image_t img = (pu->type == PU_SHIELD) ? shield_img : magnet_img;
+    if (pix) {
+        draw_sprite(pix, img, pu->x, pu->y + bob, 1);
+        return;
+    }
     uint32_t col = (pu->type == PU_SHIELD) ? COL_SHIELD : COL_MAGNET;
     int cx = pu->x + PU_SIZE / 2;
-    int cy = pu->y + PU_SIZE / 2 + (isin(M->anim * 4) * 3) / 1024;  /* bob */
+    int cy = pu->y + PU_SIZE / 2 + bob;
     int r  = PU_SIZE / 2;
     for (int dy = -r; dy <= r; dy++) {              /* diamond */
         int hw = r - abs(dy);
