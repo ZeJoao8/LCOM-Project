@@ -34,7 +34,7 @@ void draw_particles(void) {
 /* Pick the current coin animation frame from the free-running clock. */
 int coin_frame(void) {
     static const int seq[6] = { 0, 1, 2, 3, 2, 1 };
-    return seq[(M->anim / 4) % 6];
+    return seq[(M->anim / 8) % 6];
 }
 
 /* Glowing orb at a zapper tip. */
@@ -65,7 +65,7 @@ void draw_beam(const Zapper *z) {
     for (int s = 0; s <= steps; s++) {
         int bxp = ax + (bx - ax) * s / steps;
         int byp = ay + (by - ay) * s / steps;
-        int w   = (isin(z->ang + M->anim * 3 + s * 6) * 5) / 1024;  /* ±5px wobble */
+        int w   = (isin(z->ang + M->anim + s * 6) * 5) / 1024;  /* ±5px wobble */
         int wx  = bxp + (perpx * w) / 1024;
         int wy  = byp + (perpy * w) / 1024;
         draw_rect(wx - 3, wy - 3, 6, 6, COL_ZAP_BODY);   /* amber glow */
@@ -88,7 +88,7 @@ void draw_flame(int x, int y) {
 /* A floating power-up: a shield or magnet sprite, gently bobbing. Falls back to
  * a glowing diamond tagged S/M if the sprites failed to load. */
 void draw_powerup(const PowerUp *pu) {
-    int bob = (isin(M->anim * 4) * 3) / 1024;
+    int bob = (isin(M->anim * 2) * 3) / 1024;
     uint8_t    *pix = (pu->type == PU_SHIELD) ? shield_pix : magnet_pix;
     xpm_image_t img = (pu->type == PU_SHIELD) ? shield_img : magnet_img;
     if (pix) {
@@ -110,7 +110,7 @@ void draw_powerup(const PowerUp *pu) {
 /* Pulsing ring drawn around the player while the shield is active. */
 void draw_shield_aura(int px, int py) {
     int cx = px + PLAYER_W / 2, cy = py + PLAYER_H / 2;
-    int r  = PLAYER_H / 2 + 6 + (isin(M->anim * 6) * 3) / 1024;
+    int r  = PLAYER_H / 2 + 6 + (isin(M->anim * 3) * 3) / 1024;
     for (int dy = -r; dy <= r; dy++) {
         int hw = isqrt_i(r * r - dy * dy);
         draw_rect(cx - hw, cy + dy, 1, 1, COL_SHIELD);      /* left arc  */

@@ -28,7 +28,7 @@ static void render_menu(void) {
     }
 
     /* Animated player preview */
-    int preview_y = scr_h/4 - 30 + ((M->anim / 8) % 2 == 0 ? -8 : 8);
+    int preview_y = scr_h/4 - 30 + ((M->anim / 16) % 2 == 0 ? -8 : 8);
     draw_flame(scr_w/2 - PLAYER_W/2 + 1, preview_y + 33);
     if (sprites_ok)
         draw_sprite(player_pix, player_img,
