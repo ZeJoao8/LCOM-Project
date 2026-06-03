@@ -10,5 +10,6 @@
 # Ignore compiled objects and executables
 *.o
 lab2
+proj
 output.txt
 trace.txt
