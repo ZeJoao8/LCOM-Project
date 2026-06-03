@@ -85,7 +85,10 @@
 #define MAX_SCORES            5   /* leaderboard entries kept            */
 #define SCORE_WHEN_LEN       20   /* "DD/MM/YY HH:MM" + NUL              */
 #ifndef SCORES_PATH
-#define SCORES_PATH "/home/lcom/labs/project/data/jetpack_scores.txt"  /* change for your VM */
+#define SCORES_PATH "/home/lcom/labs/project/data/jetpack_scores.txt"
+#endif
+#ifndef SETTINGS_PATH
+#define SETTINGS_PATH "/home/lcom/labs/project/data/jetpack_settings.txt"
 #endif
 
 /* ── Difficulty / scoring ─────────────────────────────────────────────────── */

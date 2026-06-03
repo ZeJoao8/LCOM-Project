@@ -12,6 +12,7 @@
 #include "game/controller.h"
 #include "game/net.h"
 #include "game/scores.h"
+#include "game/settings.h"
 #include "devices/video_gr/video_gr.h"   /* h_res, v_res */
 #include "devices/rtc/rtc.h"
 
@@ -21,6 +22,7 @@ static GameModel M;
 void game_init(void) {
     model_init(&M, h_res, v_res, rtc_seed());   /* logic + RNG seeded by RTC */
     scores_load(M.high_scores, &M.high_count, MAX_SCORES);  /* persistent leaderboard */
+    settings_load(&M);                          /* load persistent settings */
     view_init();                                /* load sprites (mode already set) */
     game_on_rtc();                              /* prime the clock immediately */
 }

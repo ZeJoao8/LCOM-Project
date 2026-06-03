@@ -6,6 +6,7 @@
 #include "game/controller.h"
 #include "game/model.h"      /* model_reset */
 #include "game/net.h"        /* net_send_bye, net_reset_parser */
+#include "game/settings.h"   /* settings_save */
 #include "devices/serial/serial.h"  /* serial_rx_drain */
 
 /* Scancodes */
@@ -49,6 +50,9 @@ static void settings_activate(GameModel *m, int idx) {
         case 3: m->visual_effects = !m->visual_effects;               break;
         case 4: m->state = STATE_MENU;            m->menu_sel = 3;   break; /* back to Settings btn */
         default:                                                     break;
+    }
+    if (idx >= 0 && idx <= 3) {
+        settings_save(m);
     }
 }
 
