@@ -9,6 +9,7 @@
 
 /* Draw all live particles and score popups. */
 void draw_particles(void) {
+    if (!M->visual_effects) return;
     for (int i = 0; i < MAX_PARTS; i++)
         if (M->parts[i].active)
             draw_rect(M->parts[i].x, M->parts[i].y, 3, 3, M->parts[i].col);

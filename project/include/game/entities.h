@@ -123,6 +123,12 @@ typedef struct {
     ScoreEntry high_scores[MAX_SCORES];
     int        high_count;    /* number of valid entries in high_scores  */
     int        last_rank;     /* rank (0-based) this run earned, or -1   */
+
+    /* Settings options */
+    int        difficulty;         /* 0 = EASY, 1 = NORMAL, 2 = HARD */
+    int        control_mode;       /* 0 = W / SPACE, 1 = UP / ENTER, 2 = Z / X */
+    bool       visual_effects;     /* true = ON, false = OFF */
+    bool       initial_speed_fast; /* true = FAST, false = NORMAL */
 } GameModel;
 
 #endif /* _GAME_ENTITIES_H_ */

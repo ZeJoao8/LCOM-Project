@@ -14,7 +14,9 @@
 #define SPACE_MAKE  0x39
 #define SPACE_BREAK 0xB9
 #define ENTER_MAKE  0x1C
+#define ENTER_BREAK 0x9C
 #define UP_MAKE     0x48
+#define UP_BREAK    0xC8
 #define DOWN_MAKE   0x50
 #define P_MAKE      0x19
 
@@ -26,12 +28,25 @@ static void start_game(GameModel *m, bool versus) {
 }
 
 /* Run the action behind a top-level menu entry. */
+static void settings_activate(GameModel *m, int idx) {
+    switch (idx) {
+        case 0: m->difficulty = (m->difficulty + 1) % 3;             break;
+        case 1: m->control_mode = (m->control_mode + 1) % 3;         break;
+        case 2: m->initial_speed_fast = !m->initial_speed_fast;       break;
+        case 3: m->visual_effects = !m->visual_effects;               break;
+        case 4: m->state = STATE_MENU;            m->menu_sel = 3;   break; /* back to Settings btn */
+        default:                                                     break;
+    }
+}
+
 static void menu_activate(GameModel *m, int idx) {
     switch (idx) {
         case 0: start_game(m, false);            break;  /* PLAY (solo)      */
         case 1: start_game(m, true);             break;  /* 2-PLAYER (serial)*/
         case 2: m->state = STATE_INSTRUCTIONS;   break;
-        case 3: m->state = STATE_EXIT;           break;
+        case 3: m->state = STATE_SETTINGS;       m->menu_sel = 0; break; /* SETTINGS */
+        case 4: /* LEADERBOARD (already drawn passively) */ break;
+        case 5: m->state = STATE_EXIT;           break;  /* QUIT */
         default:                                 break;
     }
 }
@@ -42,6 +57,9 @@ void controller_handle_kbd(GameModel *m, uint8_t scancode) {
         if (m->state == STATE_MENU) {
             m->state = STATE_EXIT;
         } else {
+            if (m->state == STATE_SETTINGS) {
+                m->menu_sel = 3;
+            }
             m->state = STATE_MENU;
         }
         return;
@@ -51,40 +69,56 @@ void controller_handle_kbd(GameModel *m, uint8_t scancode) {
     }
 
     switch (m->state) {
-        case STATE_MENU:
+        case STATE_SETTINGS:
             if (scancode == UP_MAKE)
-                m->menu_sel = (m->menu_sel - 1 + MENU_ITEMS) % MENU_ITEMS;
+                m->menu_sel = (m->menu_sel - 1 + 5) % 5;
             else if (scancode == DOWN_MAKE)
-                m->menu_sel = (m->menu_sel + 1) % MENU_ITEMS;
+                m->menu_sel = (m->menu_sel + 1) % 5;
             else if (scancode == ENTER_MAKE || scancode == SPACE_MAKE)
-                menu_activate(m, m->menu_sel);
+                settings_activate(m, m->menu_sel);
             break;
 
-        case STATE_INSTRUCTIONS:
-            /* Only the BACK button (mouse) returns to the menu. */
-            break;
+        case STATE_PLAYING: {
+            bool is_make = false;
+            bool is_break = false;
+            if (m->control_mode == 0) {
+                is_make = (scancode == W_MAKE || scancode == SPACE_MAKE);
+                is_break = (scancode == W_BREAK || scancode == SPACE_BREAK);
+            } else if (m->control_mode == 1) {
+                is_make = (scancode == UP_MAKE || scancode == ENTER_MAKE);
+                is_break = (scancode == UP_BREAK || scancode == ENTER_BREAK);
+            } else if (m->control_mode == 2) {
+                is_make = (scancode == 0x2C || scancode == 0x2D); /* Z or X */
+                is_break = (scancode == 0xAC || scancode == 0xAD);
+            }
 
-        case STATE_PLAYING:
             if (scancode == P_MAKE && !m->versus) {   /* pause (solo only) */
                 m->player.thrusting = false;
                 m->state = STATE_PAUSE;
-            } else if (scancode == W_MAKE || scancode == SPACE_MAKE)
+            } else if (is_make)
                 m->player.thrusting = true;
-            else if (scancode == W_BREAK || scancode == SPACE_BREAK)
+            else if (is_break)
                 m->player.thrusting = false;
             break;
+        }
 
         case STATE_PAUSE:
             if (scancode == P_MAKE)
                 m->state = STATE_PLAYING;
             break;
 
-        case STATE_GAMEOVER:
-            if (scancode == W_MAKE || scancode == SPACE_MAKE || scancode == ENTER_MAKE) {
+        case STATE_GAMEOVER: {
+            bool is_action = false;
+            if (m->control_mode == 0)      is_action = (scancode == W_MAKE || scancode == SPACE_MAKE);
+            else if (m->control_mode == 1) is_action = (scancode == UP_MAKE || scancode == ENTER_MAKE);
+            else if (m->control_mode == 2) is_action = (scancode == 0x2C || scancode == 0x2D);
+
+            if (is_action || scancode == ENTER_MAKE) {
                 model_reset(m);
                 m->state = STATE_PLAYING;
             }
             break;
+        }
 
         default:
             break;
@@ -112,6 +146,13 @@ void controller_handle_mouse(GameModel *m, int16_t dx, int16_t dy, bool lb_press
             if (pt_in_rect(m->mouse_x, m->mouse_y, x, y, w, h)) { m->menu_sel = i; break; }
         }
     }
+    else if (m->state == STATE_SETTINGS) {
+        for (int i = 0; i < 5; i++) {
+            int x, y, w, h;
+            settings_btn_rect(m->scr_w, m->scr_h, i, &x, &y, &w, &h);
+            if (pt_in_rect(m->mouse_x, m->mouse_y, x, y, w, h)) { m->menu_sel = i; break; }
+        }
+    }
 
     /* Edge detection: act only on the press, not the hold. */
     bool clicked = lb_pressed && !m->lb_prev;
@@ -128,6 +169,16 @@ void controller_handle_mouse(GameModel *m, int16_t dx, int16_t dy, bool lb_press
             }
         }
     }
+    else if (m->state == STATE_SETTINGS) {
+        for (int i = 0; i < 5; i++) {
+            int x, y, w, h;
+            settings_btn_rect(m->scr_w, m->scr_h, i, &x, &y, &w, &h);
+            if (pt_in_rect(m->mouse_x, m->mouse_y, x, y, w, h)) {
+                settings_activate(m, i);
+                return;
+            }
+        }
+    }
     else if (m->state == STATE_INSTRUCTIONS) {
         int x, y, w, h;
         back_btn_rect(m->scr_w, m->scr_h, &x, &y, &w, &h);
@@ -139,6 +190,7 @@ void controller_handle_mouse(GameModel *m, int16_t dx, int16_t dy, bool lb_press
         back_btn_rect(m->scr_w, m->scr_h, &x, &y, &w, &h);
         if (pt_in_rect(m->mouse_x, m->mouse_y, x, y, w, h)) {
             m->state = STATE_MENU;
+            m->menu_sel = 3; /* Highlight settings button on return */
         } else {
             model_reset(m);        /* click anywhere else restarts */
             m->state = STATE_PLAYING;

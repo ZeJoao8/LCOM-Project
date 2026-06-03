@@ -6,6 +6,7 @@
  *        never mutates game state.
  */
 #include <lcom/lcf.h>
+#include <stdio.h>
 #include "game/view.h"
 #include "game/view_internal.h"
 #include "devices/video_gr/video_gr.h"   /* clear_buffer, swap_buffers */
@@ -20,10 +21,12 @@ static void render_menu(void) {
     clear_buffer(COL_MENU_BG);
 
     /* Decorative stars */
-    for (int i = 0; i < 50; i++) {
-        int sx = (i * 97 + M->anim * (i % 3 + 1)) % scr_w;
-        int sy = (i * 73) % (scr_h - 100);
-        draw_rect(sx, sy, 2, 2, COL_STAR);
+    if (M->visual_effects) {
+        for (int i = 0; i < 50; i++) {
+            int sx = (i * 97 + M->anim * (i % 3 + 1)) % scr_w;
+            int sy = (i * 73) % (scr_h - 100);
+            draw_rect(sx, sy, 2, 2, COL_STAR);
+        }
     }
 
     /* Animated player preview */
@@ -47,7 +50,7 @@ static void render_menu(void) {
         draw_text(hb, bx + 5*6*2, scr_h/4 + 92, 2, COL_SCORE);
     }
 
-    const char *labels[MENU_ITEMS] = {"PLAY", "2-PLAYER", "INSTRUCTIONS", "QUIT", "LEADERBOARD"};
+    const char *labels[MENU_ITEMS] = {"PLAY", "2-PLAYER", "INSTRUCTIONS", "SETTINGS", "LEADERBOARD", "QUIT"};
     for (int i = 0; i < MENU_ITEMS; i++) {
         int x, y, w, h;
         menu_btn_rect(scr_w, scr_h, i, &x, &y, &w, &h);
@@ -103,6 +106,36 @@ static void render_instructions(void) {
     int x, y, w, h;
     back_btn_rect(scr_w, scr_h, &x, &y, &w, &h);
     draw_button(x, y, w, h, "BACK", 2, pt_in_rect(M->mouse_x, M->mouse_y, x, y, w, h));
+
+    draw_cursor();
+}
+
+static void render_settings(void) {
+    clear_buffer(COL_MENU_BG);
+
+    draw_text_sh("SETTINGS", scr_w/2 - 8*6*3/2, 40, 3, COL_TITLE);
+
+    char diff_str[32];
+    const char *diff_names[3] = {"EASY", "NORMAL", "HARD"};
+    sprintf(diff_str, "DIFFICULTY: %s", diff_names[M->difficulty]);
+
+    char ctrl_str[32];
+    const char *ctrl_names[3] = {"W / SPACE", "UP / ENTER", "Z / X"};
+    sprintf(ctrl_str, "CONTROL: %s", ctrl_names[M->control_mode]);
+
+    char spd_str[32];
+    sprintf(spd_str, "START SPEED: %s", M->initial_speed_fast ? "FAST" : "NORMAL");
+
+    char eff_str[32];
+    sprintf(eff_str, "EFFECTS: %s", M->visual_effects ? "ON" : "OFF");
+
+    const char *labels[5] = {diff_str, ctrl_str, spd_str, eff_str, "BACK"};
+
+    for (int i = 0; i < 5; i++) {
+        int x, y, w, h;
+        settings_btn_rect(scr_w, scr_h, i, &x, &y, &w, &h);
+        draw_button(x, y, w, h, labels[i], 2, M->menu_sel == i);
+    }
 
     draw_cursor();
 }
@@ -319,6 +352,7 @@ void view_render(const GameModel *m) {
     switch (m->state) {
         case STATE_MENU:         render_menu();         break;
         case STATE_INSTRUCTIONS: render_instructions(); break;
+        case STATE_SETTINGS:     render_settings();     break;
         case STATE_PLAYING:      render_playing();      break;
         case STATE_PAUSE:        render_pause();        break;
         case STATE_GAMEOVER:     render_gameover();     break;
