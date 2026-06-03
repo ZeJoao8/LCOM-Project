@@ -117,6 +117,7 @@
 #define COL_BTN_BG     0x1A1A3A  /* idle button background */
 #define COL_BTN_HI     0xFFFFFF  /* highlighted text       */
 #define COL_GHOST      0x3CC8FF  /* opponent ghost (2-player) */
+#define COL_P2         0x3366FF  /* solid blue for the P2 label / HUD       */
 #define COL_SHIELD     0x33CCFF  /* shield power-up + aura */
 #define COL_MAGNET     0xC061FF  /* magnet power-up */
 #define COL_SHADOW     0x0A0A12  /* text drop-shadow */
@@ -140,8 +141,10 @@
 #define FLOOR_TILE     48        /* width of one scrolling floor tile (px)      */
 
 /* ── Netplay (serial 2-player) ────────────────────────────────────────────── */
-#define NET_SEND_INTERVAL 3      /* frames between state broadcasts */
-#define NET_PEER_TIMEOUT 240     /* frames without a packet => peer is "out" */
+#define NET_SEND_INTERVAL  3      /* frames between state broadcasts */
+#define NET_PEER_TIMEOUT  240     /* frames without a packet => peer is "out" */
+#define NET_HELLO_INTERVAL 10     /* frames between HELLO/READY beacons in WAITING */
+#define NET_MAX_PAYLOAD    8      /* upper bound on a packet's payload length */
 
 /* ── Menu / button geometry ───────────────────────────────────────────────── */
 #define MENU_ITEMS          6

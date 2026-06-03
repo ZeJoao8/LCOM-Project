@@ -20,6 +20,7 @@ extern int g_scroll_x;   /* world scroll accumulator (advances only while PLAYIN
 /* ── Sprites (defined in view_sprites.c, loaded by view_init) ─────────────── */
 extern bool        sprites_ok;
 extern uint8_t    *player_pix;        extern xpm_image_t player_img;
+extern uint8_t    *player_p2_pix;     extern xpm_image_t player_p2_img;
 extern uint8_t    *coin_pix[COIN_FRAMES]; extern xpm_image_t coin_img[COIN_FRAMES];
 extern uint8_t    *missile_pix;       extern xpm_image_t missile_img;
 extern uint8_t    *instructions_pix;  extern xpm_image_t instructions_img;

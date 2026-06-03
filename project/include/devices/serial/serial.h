@@ -38,4 +38,16 @@ int serial_rx_dropped(void);
 /** Number of UART line-status errors (overrun/parity/framing/break) seen. */
 int serial_line_errors(void);
 
+/** Free bytes in the TX ring buffer (use to enforce frame atomicity). */
+int  serial_tx_free(void);
+
+/** Discard every byte currently in the RX ring; used on connection reset. */
+void serial_rx_drain(void);
+
+/** Number of TX frames the caller chose not to send (would not fit atomically). */
+int  serial_tx_dropped_frames(void);
+
+/** Increment the TX-dropped-frames counter (called by net.c on rejection). */
+void serial_tx_count_drop(void);
+
 #endif /* _SERIAL_H_ */

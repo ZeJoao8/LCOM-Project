@@ -5,6 +5,8 @@
  */
 #include "game/controller.h"
 #include "game/model.h"      /* model_reset */
+#include "game/net.h"        /* net_send_bye, net_reset_parser */
+#include "devices/serial/serial.h"  /* serial_rx_drain */
 
 /* Scancodes */
 #define ESC_MAKE    0x01
@@ -20,11 +22,22 @@
 #define DOWN_MAKE   0x50
 #define P_MAKE      0x19
 
-/* Start a fresh run, solo or serial 2-player. */
+/* Start a fresh run, solo or serial 2-player. Solo jumps straight into play;
+ * 2-player enters a lobby/waiting state and only transitions to PLAYING once
+ * both peers have exchanged HELLO + READY. */
 static void start_game(GameModel *m, bool versus) {
     model_reset(m);
     m->versus = versus;     /* set after reset, which clears the round state */
-    m->state = STATE_PLAYING;
+    if (versus) {
+        m->peer_seen  = false;
+        m->peer_ready = false;
+        m->wait_ctr   = 0;
+        serial_rx_drain();      /* discard any stale bytes from a previous run */
+        net_reset_parser();     /* clear the frame parser's sliding window     */
+        m->state = STATE_WAITING;
+    } else {
+        m->state = STATE_PLAYING;
+    }
 }
 
 /* Run the action behind a top-level menu entry. */
@@ -59,6 +72,9 @@ void controller_handle_kbd(GameModel *m, uint8_t scancode) {
         } else {
             if (m->state == STATE_SETTINGS) {
                 m->menu_sel = 3;
+            }
+            if (m->state == STATE_WAITING && m->versus) {
+                net_send_bye();      /* tell the peer we cancelled the lobby */
             }
             m->state = STATE_MENU;
         }

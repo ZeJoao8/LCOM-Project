@@ -45,6 +45,16 @@ void game_update(void) {
     net_poll(&M);    /* apply any opponent packets that arrived */
     net_tick(&M);    /* broadcast our state in 2-player mode    */
 
+    /* WAITING → PLAYING: both peers have HELLOed and READYed. Refresh the
+     * round (model_reset clears handshake fields too, hence the restore) and
+     * start playing on the same frame on both sides. */
+    if (M.state == STATE_WAITING && M.peer_seen && M.peer_ready) {
+        bool was_versus = M.versus;
+        model_reset(&M);
+        M.versus = was_versus;
+        M.state = STATE_PLAYING;
+    }
+
     /* On entering game-over from a solo run, persist the score with the RTC
      * timestamp captured for this run. */
     if (M.state == STATE_GAMEOVER && prev != STATE_GAMEOVER && !M.versus) {

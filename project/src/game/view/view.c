@@ -6,7 +6,7 @@
  *        never mutates game state.
  */
 #include <lcom/lcf.h>
-#include <stdio.h>
+#include <stdio.h>                        /* snprintf */
 #include "game/view.h"
 #include "game/view_internal.h"
 #include "devices/video_gr/video_gr.h"   /* clear_buffer, swap_buffers */
@@ -79,6 +79,41 @@ static void render_menu(void) {
             draw_text(M->high_scores[i].when, lx + 18 + 7*6, ry, 1, COL_STAR);
         }
     }
+
+    draw_cursor();
+}
+
+/* Lobby for 2-player: stay here until both peers exchange HELLO + READY. */
+static void render_waiting(void) {
+    clear_buffer(COL_MENU_BG);
+
+    /* Same decorative stars as the menu, for visual continuity. */
+    for (int i = 0; i < 50; i++) {
+        int sx = (i * 97 + M->anim * (i % 3 + 1)) % scr_w;
+        int sy = (i * 73) % (scr_h - 100);
+        draw_rect(sx, sy, 2, 2, COL_STAR);
+    }
+
+    /* Floating player preview (same idle bob as the title screen). */
+    int preview_y = scr_h/4 - 30 + ((M->anim / 16) % 2 == 0 ? -8 : 8);
+    draw_flame(scr_w/2 - PLAYER_W/2 + 1, preview_y + 33);
+    if (sprites_ok)
+        draw_sprite(player_pix, player_img,
+                    scr_w/2 - PLAYER_W/2, preview_y, PLAYER_SCALE);
+    else
+        draw_rect(scr_w/2 - PLAYER_W/2, preview_y, PLAYER_W, PLAYER_H, COL_PLAYER);
+
+    draw_text_c_sh("WAITING FOR PLAYER 2", scr_w/2, scr_h/2 - 10, 3, COL_TITLE);
+
+    const char *dots = ((M->anim / 20) % 3 == 0) ? "."
+                     : ((M->anim / 20) % 3 == 1) ? ".."
+                     :                              "...";
+    draw_text_c(dots, scr_w/2, scr_h/2 + 30, 3, COL_TEXT);
+
+    if (M->peer_seen && !M->peer_ready)
+        draw_text_c("PEER FOUND", scr_w/2, scr_h/2 + 70, 1, COL_P2);
+
+    draw_text_c("PRESS ESC TO CANCEL", scr_w/2, scr_h - 60, 1, COL_STAR);
 
     draw_cursor();
 }
@@ -262,8 +297,8 @@ static void render_playing(void) {
     if (M->versus) {
         char p2[16];
         int_to_str(M->opp_score, p2, sizeof(p2));
-        draw_text_c("P2", scr_w/2 - 30, 10, 1, COL_GHOST);
-        draw_text(p2, scr_w/2 - 10, 10, 1, COL_GHOST);
+        draw_text_c("P2", scr_w/2 - 30, 10, 1, COL_P2);
+        draw_text(p2, scr_w/2 - 10, 10, 1, COL_P2);
         if (!M->opp_alive)
             draw_text_c("P2 OUT", scr_w/2, 26, 1, COL_WARN);
     }
@@ -305,10 +340,9 @@ static void render_gameover(void) {
 
     /* 2-player result (updates live as the opponent's DEAD packet arrives) */
     if (M->versus) {
-        char p2[16];
-        int_to_str(M->opp_score, p2, sizeof(p2));
-        draw_text("P2 SCORE:", scr_w/2 - 11*6/2, scr_h/2 + 14, 1, COL_GHOST);
-        draw_text(p2, scr_w/2 + 7*6 - 11*6/2, scr_h/2 + 14, 1, COL_GHOST);
+        char p2line[32];
+        snprintf(p2line, sizeof(p2line), "P2 SCORE: %d", M->opp_score);
+        draw_text_c(p2line, scr_w/2, scr_h/2 + 14, 1, COL_P2);
 
         const char *res; uint32_t rc;
         if (M->opp_alive)                  { res = "P2 STILL FLYING"; rc = COL_TEXT; }
@@ -360,6 +394,7 @@ void view_render(const GameModel *m) {
         case STATE_MENU:         render_menu();         break;
         case STATE_INSTRUCTIONS: render_instructions(); break;
         case STATE_SETTINGS:     render_settings();     break;
+        case STATE_WAITING:      render_waiting();      break;
         case STATE_PLAYING:      render_playing();      break;
         case STATE_PAUSE:        render_pause();        break;
         case STATE_GAMEOVER:     render_gameover();     break;

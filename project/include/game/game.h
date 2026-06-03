@@ -9,6 +9,7 @@ typedef enum {
     STATE_MENU,
     STATE_INSTRUCTIONS,
     STATE_SETTINGS,
+    STATE_WAITING,          /* 2-player lobby: handshake with the peer over COM1 */
     STATE_PLAYING,
     STATE_PAUSE,
     STATE_GAMEOVER,
