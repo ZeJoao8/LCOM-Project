@@ -1,0 +1,18 @@
+/* XPM */
+static char *missile_xpm[] = {
+"20 8 6 1",
+". c #FF00FF",
+"o c #551111",
+"r c #E03030",
+"w c #FFFFFF",
+"y c #FFE000",
+"a c #FF7711",
+"..............oo....",
+"..........rrrrro....",
+"..orrrrrrrrrrrwoa...",
+"orrrrrrrrrrrrrwoayay",
+"orrrrrrrrrrrrrwoayay",
+"..orrrrrrrrrrrwoa...",
+"..........rrrrro....",
+"..............oo....",
+};
