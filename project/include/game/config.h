@@ -132,7 +132,7 @@
 #define NET_PEER_TIMEOUT 240     /* frames without a packet => peer is "out" */
 
 /* ── Menu / button geometry ───────────────────────────────────────────────── */
-#define MENU_ITEMS          4
+#define MENU_ITEMS          5
 #define BTN_W             240
 #define BTN_H              30
 #define BTN_GAP            50

@@ -1,0 +1,13 @@
+/* XPM */
+static const char *instructions_xpm[] = {
+"92 7 2 1",
+". c #FF00FF",   /* transparent (project convention) */
+"X c #fb05ce",   /* letters */
+".XXXXX..XX...XX..XXXXX..XXXXX..XXXX...XX...XX..XXXXX..XXXXX..XXXXX..XXXX..XX...XX..XXXXX....",
+"..X....XXX..XX.XX........X....XX..XX..XX...XX.XX........X......X...XX..XX.XXX..XX.XX........",
+"..X....XX.X.XX..XXXX.....X....XXXXX...XX...XX.XX........X......X...XX..XX.XX.X.XX..XXXX.....",
+"..X....XX..XXX.....XX....X....XX.XX...XX...XX.XX........X......X...XX..XX.XX..XXX.....XX....",
+"..X....XX...XX.XX..XX....X....XX..XX..XX...XX.XX........X......X...XX..XX.XX...XX.XX..XX....",
+".XXXXX.XX...XX..XXXX.....X....XX...XX..XXXXX...XXXXX....X....XXXXX..XXXX..XX...XX..XXXX.....",
+"............................................................................................"
+};
