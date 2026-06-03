@@ -30,6 +30,9 @@ void model_init(GameModel *m, int scr_w, int scr_h, unsigned seed) {
     m->opp_score = 0;
     m->dead_sent = false;
     m->net_silence = 0;
+    m->peer_seen = false;
+    m->peer_ready = false;
+    m->wait_ctr = 0;
     m->shield_timer = 0;
     m->magnet_timer = 0;
     m->powerup_timer = 0;

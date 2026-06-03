@@ -118,13 +118,16 @@ void draw_shield_aura(int px, int py) {
     }
 }
 
-/* Translucent-looking cyan silhouette of the 2-player opponent. */
+/* 2-player opponent: same silhouette as the local player but recoloured blue
+ * via a dedicated XPM (player_p2.xpm). Falls back to the red sprite if the P2
+ * XPM failed to load, and to a solid blue rectangle if no sprites loaded at
+ * all. A blue "P2" label floats above so the two characters are unambiguous. */
 void draw_ghost(int y) {
-    for (int row = 0; row < PLAYER_H; row += 2)        /* scanline fill = "ghosted" */
-        draw_rect(PLAYER_X, y + row, PLAYER_W, 1, COL_GHOST);
-    draw_rect(PLAYER_X, y, PLAYER_W, 1, COL_TEXT);
-    draw_rect(PLAYER_X, y + PLAYER_H - 1, PLAYER_W, 1, COL_TEXT);
-    draw_rect(PLAYER_X, y, 1, PLAYER_H, COL_TEXT);
-    draw_rect(PLAYER_X + PLAYER_W - 1, y, 1, PLAYER_H, COL_TEXT);
-    draw_text("P2", PLAYER_X + 2, y - 12, 1, COL_GHOST);
+    if (player_p2_pix)
+        draw_sprite(player_p2_pix, player_p2_img, PLAYER_X, y, PLAYER_SCALE);
+    else if (sprites_ok)
+        draw_sprite(player_pix, player_img, PLAYER_X, y, PLAYER_SCALE);
+    else
+        draw_rect(PLAYER_X, y, PLAYER_W, PLAYER_H, COL_P2);
+    draw_text_c_sh("P2", PLAYER_X + PLAYER_W/2, y - 14, 1, COL_P2);
 }

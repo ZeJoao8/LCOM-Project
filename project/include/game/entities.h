@@ -119,6 +119,11 @@ typedef struct {
     bool dead_sent;       /* our DEAD packet already sent this round   */
     int  net_silence;     /* frames since the last packet from the peer */
 
+    /* Handshake state, valid while STATE_WAITING. Owned by start_game. */
+    bool peer_seen;       /* we received a HELLO since entering WAITING */
+    bool peer_ready;      /* we received a READY since entering WAITING */
+    int  wait_ctr;        /* frames spent in WAITING (UI + send cadence) */
+
     /* Persistent leaderboard (loaded/saved by the glue layer). */
     ScoreEntry high_scores[MAX_SCORES];
     int        high_count;    /* number of valid entries in high_scores  */
