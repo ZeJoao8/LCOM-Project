@@ -231,9 +231,11 @@ void model_update(GameModel *m) {
             m->coins[i].active = false;
             m->coins_collected++;
             int ccx = m->coins[i].x + COIN_SIZE / 2, ccy = m->coins[i].y + COIN_SIZE / 2;
-            for (int p = 0; p < COIN_PICK_PARTS; p++)
-                spawn_particle(m, ccx, ccy, (rand() % 9) - 4, (rand() % 7) - 5,
-                               10 + rand() % 8, COL_COIN_SHINE);
+            for (int p = 0; p < COIN_PICK_PARTS; p++) {
+                uint32_t c = (p & 1) ? COL_COIN_SHINE : COL_COIN;   /* gold/white mix */
+                spawn_particle(m, ccx, ccy, (rand() % 11) - 5, -(2 + rand() % 6),
+                               12 + rand() % 8, c);                 /* upward pop      */
+            }
             spawn_popup(m, m->coins[i].x, m->coins[i].y - 6);
         }
     }

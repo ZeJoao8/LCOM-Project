@@ -14,6 +14,7 @@
 /* Current frame context (declared extern in view_internal.h). */
 const GameModel *M = NULL;
 int scr_w = 0, scr_h = 0;
+int g_scroll_x = 0;   /* world scroll accumulator; advanced only while PLAYING */
 
 /* ── Per-state screens ────────────────────────────────────────────────────── */
 
@@ -142,10 +143,7 @@ static void render_settings(void) {
 
 static void render_playing(void) {
     draw_parallax();                 /* sky gradient + scrolling skylines */
-
-    /* Floor + floor line */
-    draw_rect(0, scr_h - FLOOR_H, scr_w, FLOOR_H, COL_FLOOR);
-    draw_rect(0, scr_h - FLOOR_H, scr_w, 2, COL_ZAP_TIP);
+    draw_floor();                    /* scrolling ground for a sense of speed  */
 
     /* Zappers */
     for (int i = 0; i < MAX_ZAPPERS; i++)
@@ -345,9 +343,18 @@ static void render_pause(void) {
 }
 
 void view_render(const GameModel *m) {
+    static game_state_t prev = STATE_MENU;
+    static int fade = 0;
+
     M = m;
     scr_w = m->scr_w;
     scr_h = m->scr_h;
+
+    if (m->state == STATE_PLAYING)
+        g_scroll_x += m->scroll_speed;   /* drive the ground / speed lines */
+
+    if (m->state != prev) fade = FADE_FRAMES;   /* fade-in on every state change */
+    prev = m->state;
 
     switch (m->state) {
         case STATE_MENU:         render_menu();         break;
@@ -357,6 +364,11 @@ void view_render(const GameModel *m) {
         case STATE_PAUSE:        render_pause();        break;
         case STATE_GAMEOVER:     render_gameover();     break;
         default:                                        break;
+    }
+
+    if (fade > 0) {                              /* ramp brightness 0 -> full */
+        fade_buffer(255 * (FADE_FRAMES - fade) / FADE_FRAMES);
+        fade--;
     }
 
     swap_buffers();   /* present to VRAM */

@@ -1,9 +1,48 @@
 /**
  * @file view_background.c
- * @brief Procedural parallax backdrop: a sky gradient, drifting stars and two
- *        scrolling city skylines. Drawn entirely in code — no image assets.
+ * @brief Procedural parallax backdrop: a sky gradient, a moon, drifting clouds
+ *        and stars, and three scrolling city skylines (far / near / foreground).
+ *        Drawn entirely in code — no image assets.
  */
 #include "game/view_internal.h"
+
+/* A filled disc of radius r centred on (cx, cy). */
+static void fill_disc(int cx, int cy, int r, uint32_t col) {
+    for (int dy = -r; dy <= r; dy++) {
+        int hw = isqrt_i(r * r - dy * dy);
+        draw_rect(cx - hw, cy + dy, 2 * hw, 1, col);
+    }
+}
+
+/* Moon high in the sky: a soft halo, the disc, and a couple of dim craters. */
+static void draw_moon(void) {
+    int cx = scr_w - 130, cy = 86, r = 30;
+    fill_disc(cx, cy, r + 5, COL_MOON_GLOW);     /* halo  */
+    fill_disc(cx, cy, r,     COL_MOON);          /* disc  */
+    fill_disc(cx - 9, cy - 6, 5, COL_MOON_GLOW); /* craters */
+    fill_disc(cx + 8, cy + 7, 4, COL_MOON_GLOW);
+    fill_disc(cx + 3, cy - 9, 3, COL_MOON_GLOW);
+}
+
+/* A fluffy cloud blob built from a few overlapping rectangles. */
+static void draw_cloud(int x, int y, int s) {
+    draw_rect(x,         y + s,     6 * s, 2 * s, COL_CLOUD);
+    draw_rect(x + s,     y,         4 * s, 2 * s, COL_CLOUD);
+    draw_rect(x + 3 * s, y - s + 2, 2 * s, 2 * s, COL_CLOUD);
+}
+
+/* Three clouds drifting slowly leftward, wrapping around the screen width. */
+static void draw_clouds(void) {
+    int drift = M->anim / 6;
+    int span  = scr_w + 120;
+    static const int cy[3] = { 70, 140, 110 };
+    static const int cs[3] = { 6, 4, 5 };
+    for (int i = 0; i < 3; i++) {
+        int base = i * (span / 3) + i * 37;
+        int x = scr_w - (((base + drift) % span));
+        draw_cloud(x, cy[i], cs[i]);
+    }
+}
 
 /* One wrapping row of building silhouettes, scrolled by @p scroll px. */
 static void draw_skyline(int scroll, int height_from_floor, int max_h, uint32_t col) {
@@ -27,7 +66,8 @@ static void draw_skyline(int scroll, int height_from_floor, int max_h, uint32_t 
     }
 }
 
-/* Procedural parallax backdrop: sky gradient, stars, two scrolling skylines. */
+/* Procedural parallax backdrop: sky gradient, moon, stars, drifting clouds and
+ * three scrolling skylines (far / near / foreground) for depth. */
 void draw_parallax(void) {
     if (!M->visual_effects) {
         draw_rect(0, 0, scr_w, scr_h - FLOOR_H, COL_BG);
@@ -39,11 +79,14 @@ void draw_parallax(void) {
         uint32_t col = lerp_col(COL_SKY_TOP, COL_SKY_BOT, b * 255 / (bands - 1));
         draw_rect(0, b * sky_h / bands, scr_w, sky_h / bands + 1, col);
     }
+    draw_moon();
     for (int i = 0; i < 40; i++) {                  /* stars, gentle drift */
         int sx = (i * 97 + M->anim / 3) % scr_w;
         int sy = (i * 61) % (sky_h / 2);
         draw_rect(sx, sy, 1, 1, COL_STAR);
     }
-    draw_skyline(M->anim / 3, 140, 60,  COL_CITY_FAR);   /* far: short, slow */
-    draw_skyline(M->anim,      60, 130, COL_CITY_NEAR);  /* near: tall, fast */
+    draw_clouds();
+    draw_skyline(M->anim / 3, 140, 60,  COL_CITY_FAR);   /* far:  short, slow    */
+    draw_skyline(M->anim,      60, 130, COL_CITY_NEAR);  /* near: tall,  fast    */
+    draw_skyline(M->anim * 2,   0, 150, COL_CITY_FORE);  /* fore: tallest, fastest */
 }
