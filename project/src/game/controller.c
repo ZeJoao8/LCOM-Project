@@ -91,6 +91,15 @@ void controller_handle_kbd(GameModel *m, uint8_t scancode) {
     }
 
     switch (m->state) {
+        case STATE_MENU:
+            if (scancode == UP_MAKE)
+                m->menu_sel = (m->menu_sel - 1 + MENU_ITEMS) % MENU_ITEMS;
+            else if (scancode == DOWN_MAKE)
+                m->menu_sel = (m->menu_sel + 1) % MENU_ITEMS;
+            else if (scancode == ENTER_MAKE || scancode == SPACE_MAKE)
+                menu_activate(m, m->menu_sel);
+            break;
+
         case STATE_SETTINGS:
             if (scancode == UP_MAKE)
                 m->menu_sel = (m->menu_sel - 1 + 5) % 5;
