@@ -33,4 +33,14 @@ int icos(int a);
 /** Compute the two screen-space endpoints of a zapper beam. */
 void zap_endpoints(const Zapper *z, int *ax, int *ay, int *bx, int *by);
 
+int model_coin_value(const GameModel *m);
+ 
+/**
+ * Devolve a velocidade de míssil ajustada:
+ *   speed          — sem poder
+ *   speed * 3 / 4  — com POWER_SLOW_MISSILES activo
+ */
+int model_missile_speed(const GameModel *m, int base_speed);
+
+
 #endif /* _GAME_MODEL_H_ */

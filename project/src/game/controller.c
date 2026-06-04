@@ -3,11 +3,15 @@
  * @brief Input handling: maps keyboard scancodes and mouse packets onto the
  *        model. Button geometry is shared with the view through config.h.
  */
+
+#include <string.h>
 #include "game/controller.h"
-#include "game/model.h"      /* model_reset */
-#include "game/net.h"        /* net_send_bye, net_reset_parser */
-#include "game/settings.h"   /* settings_save */
-#include "devices/serial/serial.h"  /* serial_rx_drain */
+#include "game/model.h"
+#include "game/scores.h"
+#include "game/game.h"
+#include "game/net.h"
+#include "game/settings.h"
+#include "devices/serial/serial.h"
 
 /* Scancodes */
 #define ESC_MAKE    0x01
@@ -22,6 +26,29 @@
 #define UP_BREAK    0xC8
 #define DOWN_MAKE   0x50
 #define P_MAKE      0x19
+#define BACK_MAKE   0x0E
+
+/* Scancode -> ASCII (uppercase) for name input.
+ * Returns '\0' if the key has no printable mapping we want. */
+static char scancode_to_char(uint8_t sc) {
+    /* Row 1: numbers */
+    static const char row1[] = "1234567890";
+    if (sc >= 0x02 && sc <= 0x0B) return row1[sc - 0x02];
+    /* Row 2: QWERTY */
+    static const char row2[] = "QWERTYUIOP";
+    if (sc >= 0x10 && sc <= 0x19) return row2[sc - 0x10];
+    /* Row 3: ASDFGH */
+    static const char row3[] = "ASDFGHJKL";
+    if (sc >= 0x1E && sc <= 0x26) return row3[sc - 0x1E];
+    /* Row 4: ZXCVBN */
+    static const char row4[] = "ZXCVBNM";
+    if (sc >= 0x2C && sc <= 0x32) return row4[sc - 0x2C];
+    /* Space */
+    if (sc == 0x39) return ' ';
+    return '\0';
+}
+
+
 
 /* Start a fresh run, solo or serial 2-player. Solo jumps straight into play;
  * 2-player enters a lobby/waiting state and only transitions to PLAYING once
@@ -43,6 +70,19 @@ static void start_game(GameModel *m, bool versus) {
     }
 }
 
+
+/* Load all scores e vai para o all-scores view atualizado do disco */
+static void open_leaderboard_all(GameModel *m) {
+    /* Força a leitura do ficheiro real guardado antes de mostrar no ecrã */
+    scores_load(m->high_scores, &m->high_count, MAX_SCORES);
+    
+    scores_get_all(m->high_scores, m->high_count,
+                   m->lb_entries, &m->lb_count);
+    m->lb_scroll = 0;
+    m->state = STATE_LEADERBOARD_ALL;
+}
+
+
 /* Run the action behind a top-level menu entry. */
 static void settings_activate(GameModel *m, int idx) {
     switch (idx) {
@@ -63,9 +103,9 @@ static void menu_activate(GameModel *m, int idx) {
         case 0: start_game(m, false);            break;  /* PLAY (solo)      */
         case 1: start_game(m, true);             break;  /* 2-PLAYER (serial)*/
         case 2: m->state = STATE_INSTRUCTIONS;   break;
-        case 3: m->state = STATE_SETTINGS;       m->menu_sel = 0; break; /* SETTINGS */
-        case 4: /* LEADERBOARD (already drawn passively) */ break;
-        case 5: m->state = STATE_EXIT;           break;  /* QUIT */
+        case 3: m->state = STATE_SETTINGS;       m->menu_sel = 0; break;
+        case 4: open_leaderboard_all(m);          break;
+        case 5: m->state = STATE_EXIT;           break;
         default:                                 break;
     }
 }
@@ -80,7 +120,7 @@ void controller_handle_kbd(GameModel *m, uint8_t scancode) {
                 m->menu_sel = 3;
             }
             if (m->state == STATE_WAITING && m->versus) {
-                net_send_bye();      /* tell the peer we cancelled the lobby */
+                net_send_bye();
             }
             m->state = STATE_MENU;
         }
@@ -100,6 +140,11 @@ void controller_handle_kbd(GameModel *m, uint8_t scancode) {
                 menu_activate(m, m->menu_sel);
             break;
 
+        case STATE_INSTRUCTIONS:
+            if (scancode == ENTER_MAKE)
+                m->state = STATE_MENU;
+            break;
+
         case STATE_SETTINGS:
             if (scancode == UP_MAKE)
                 m->menu_sel = (m->menu_sel - 1 + 5) % 5;
@@ -110,17 +155,14 @@ void controller_handle_kbd(GameModel *m, uint8_t scancode) {
             break;
 
         case STATE_PLAYING: {
-            bool is_make = false;
-            bool is_break = false;
-            if (m->control_mode == 0) {
-                is_make = (scancode == W_MAKE || scancode == SPACE_MAKE);
-                is_break = (scancode == W_BREAK || scancode == SPACE_BREAK);
-            } else if (m->control_mode == 1) {
-                is_make = (scancode == UP_MAKE || scancode == ENTER_MAKE);
-                is_break = (scancode == UP_BREAK || scancode == ENTER_BREAK);
+            bool is_make  = (scancode == W_MAKE  || scancode == SPACE_MAKE);
+            bool is_break = (scancode == W_BREAK || scancode == SPACE_BREAK);
+            if (m->control_mode == 1) {
+                is_make  |= (scancode == UP_MAKE    || scancode == ENTER_MAKE);
+                is_break |= (scancode == UP_BREAK   || scancode == ENTER_BREAK);
             } else if (m->control_mode == 2) {
-                is_make = (scancode == 0x2C || scancode == 0x2D); /* Z or X */
-                is_break = (scancode == 0xAC || scancode == 0xAD);
+                is_make  |= (scancode == 0x2C || scancode == 0x2D);
+                is_break |= (scancode == 0xAC || scancode == 0xAD);
             }
 
             if (scancode == P_MAKE && !m->versus) {   /* pause (solo only) */
@@ -143,15 +185,69 @@ void controller_handle_kbd(GameModel *m, uint8_t scancode) {
             if (m->control_mode == 0)      is_action = (scancode == W_MAKE || scancode == SPACE_MAKE);
             else if (m->control_mode == 1) is_action = (scancode == UP_MAKE || scancode == ENTER_MAKE);
             else if (m->control_mode == 2) is_action = (scancode == 0x2C || scancode == 0x2D);
-
-            if (is_action || scancode == ENTER_MAKE) {
+            if (is_action || scancode == ENTER_MAKE)
                 start_game(m, m->versus);
-            }
             break;
         }
 
+        case STATE_NAME_INPUT:
+            if (scancode == ENTER_MAKE) {
+                if (!m->typing_password) {
+                    if (m->input_name_len > 0) m->typing_password = true;
+                } else {
+                    int res_xp = game_authenticate_user(m->input_name, m->input_password);
+                    if (res_xp == -1) {
+                        m->login_error = true;
+                        memset(m->input_password, 0, sizeof(m->input_password));
+                        m->input_password_len = 0;
+                    } else {
+                        m->xp_total = res_xp;
+                        m->powers_unlocked = 0;
+                        if (m->xp_total >= XP_THRESH_1) m->powers_unlocked |= POWER_DOUBLE_COINS;
+                        if (m->xp_total >= XP_THRESH_2) m->powers_unlocked |= POWER_SHIELD_START;
+                        if (m->xp_total >= XP_THRESH_3) m->powers_unlocked |= POWER_SLOW_MISSILES;
+                        if (m->xp_total >= XP_THRESH_4) m->powers_unlocked |= POWER_EXTRA_LIFE;
+                        m->login_error = false;
+                        scores_load(m->high_scores, &m->high_count, MAX_SCORES);
+                        m->state = STATE_MENU;
+                    }
+                }
+            } else if (scancode == BACK_MAKE) {
+                m->login_error = false;
+                if (m->typing_password) {
+                    if (m->input_password_len > 0) m->input_password[--m->input_password_len] = '\0';
+                } else {
+                    if (m->input_name_len > 0) m->input_name[--m->input_name_len] = '\0';
+                }
+            } else {
+                char c = scancode_to_char(scancode);
+                if (c != '\0') {
+                    m->login_error = false;
+                    if (m->typing_password) {
+                        if (m->input_password_len < 15) {
+                            m->input_password[m->input_password_len++] = c;
+                            m->input_password[m->input_password_len] = '\0';
+                        }
+                    } else {
+                        if (m->input_name_len < 14) {
+                            m->input_name[m->input_name_len++] = c;
+                            m->input_name[m->input_name_len] = '\0';
+                        }
+                    }
+                }
+            }
+            break;
+ 
+        case STATE_LEADERBOARD_ALL:
+            if (scancode == UP_MAKE && m->lb_scroll > 0)
+                m->lb_scroll--;
+            else if (scancode == DOWN_MAKE && m->lb_scroll < m->lb_count - 1)
+                m->lb_scroll++;
+            break;
+ 
         default:
             break;
+
     }
 }
 
@@ -209,6 +305,12 @@ void controller_handle_mouse(GameModel *m, int16_t dx, int16_t dy, bool lb_press
             }
         }
     }
+    else if (m->state == STATE_LEADERBOARD_ALL) {
+        int x, y, w, h;
+        back_btn_rect(m->scr_w, m->scr_h, &x, &y, &w, &h);
+        if (pt_in_rect(m->mouse_x, m->mouse_y, x, y, w, h))
+            m->state = STATE_MENU;
+    }
     else if (m->state == STATE_INSTRUCTIONS) {
         int x, y, w, h;
         back_btn_rect(m->scr_w, m->scr_h, &x, &y, &w, &h);
@@ -222,7 +324,7 @@ void controller_handle_mouse(GameModel *m, int16_t dx, int16_t dy, bool lb_press
             m->state = STATE_MENU;
             m->menu_sel = 3;
         } else {
-            start_game(m, m->versus);   /* versus re-runs handshake; solo goes direct */
+            start_game(m, m->versus);
         }
     }
 }

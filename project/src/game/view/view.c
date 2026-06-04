@@ -9,6 +9,7 @@
 #include <stdio.h>                        /* snprintf */
 #include "game/view.h"
 #include "game/view_internal.h"
+#include "game/game.h"
 #include "devices/video_gr/video_gr.h"   /* clear_buffer, swap_buffers */
 
 /* Current frame context (declared extern in view_internal.h). */
@@ -68,7 +69,10 @@ static void render_menu(void) {
     if (M->high_count > 0) {
         int lx = 24, ly = scr_h/2 - 6;
         draw_text("BEST RUNS", lx, ly, 1, COL_TITLE);
-        for (int i = 0; i < M->high_count; i++) {
+
+        int limit = (M->high_count > 5) ? 5 : M->high_count;
+
+        for (int i = 0; i < limit; i++) {
             uint32_t rc = (i == M->last_rank) ? COL_SCORE : COL_TEXT;
             char num[8], sc[12];
             int_to_str(i + 1, num, sizeof(num));
@@ -79,6 +83,52 @@ static void render_menu(void) {
             draw_text(M->high_scores[i].when, lx + 18 + 7*6, ry, 1, COL_STAR);
         }
     }
+
+    /* XP bar bottom-left */
+    
+        int xp   = M->xp_total;
+        int next = XP_THRESH_4;
+        if      (xp < XP_THRESH_1) next = XP_THRESH_1;
+        else if (xp < XP_THRESH_2) next = XP_THRESH_2;
+        else if (xp < XP_THRESH_3) next = XP_THRESH_3;
+        else if (xp < XP_THRESH_4) next = XP_THRESH_4;
+ 
+        int bw = 180, bh = 10;
+        int bx = 24, by = scr_h - 35;
+        draw_text("XP", bx, by - 14, 1, COL_STAR);
+        {
+            char xpbuf[16];
+            int_to_str(xp, xpbuf, sizeof(xpbuf));
+            draw_text(xpbuf, bx + 18, by - 14, 1, COL_SCORE);
+        }
+        draw_rect(bx, by, bw, bh, COL_BTN_BG);
+        {
+            int fill = (xp >= next) ? bw : (xp * bw / next);
+            if (fill > 0) draw_rect(bx, by, fill, bh, COL_SHIELD);
+        }
+        draw_rect(bx,          by,          bw, 2,  COL_OBS_TOP);
+        draw_rect(bx,          by + bh - 2, bw, 2,  COL_OBS_TOP);
+        draw_rect(bx,          by,          2,  bh, COL_OBS_TOP);
+        draw_rect(bx + bw - 2, by,          2,  bh, COL_OBS_TOP);
+    
+ 
+    /* unlocked power icons bottom row */
+    
+        int ix = 24, iy = scr_h - 75;
+        if (M->powers_unlocked & POWER_DOUBLE_COINS) {
+            draw_text("2xCOIN", ix, iy, 1, COL_COIN);  ix += 7*6 + 4;
+        }
+        if (M->powers_unlocked & POWER_SHIELD_START) {
+            draw_text("SHLD+", ix, iy, 1, COL_SHIELD);  ix += 6*6 + 4;
+        }
+        if (M->powers_unlocked & POWER_SLOW_MISSILES) {
+            draw_text("SLWMSL", ix, iy, 1, COL_MAGNET); ix += 7*6 + 4;
+        }
+        if (M->powers_unlocked & POWER_EXTRA_LIFE) {
+            draw_text("XLIFE", ix, iy, 1, COL_GAMEOVER);
+        }
+    
+
 
     draw_cursor();
 }
@@ -291,7 +341,42 @@ static void render_playing(void) {
         char t[8]; int_to_str((M->magnet_timer + 59) / 60, t, sizeof(t));
         draw_text("MAGNET", scr_w - 120, hud_y, 1, COL_MAGNET);
         draw_text(t, scr_w - 120 + 7 * 6, hud_y, 1, COL_MAGNET);
+        hud_y += 14;
     }
+
+    /* extra life indicator */
+    if ((M->powers_unlocked & POWER_EXTRA_LIFE) && !M->extra_life_used) {
+            draw_text("1UP", scr_w - 120, hud_y, 1, COL_GAMEOVER);
+    }
+
+    /* XP mini-bar top-centre */
+    
+        int xp   = M->xp_total;
+        int next = XP_THRESH_4;
+        if      (xp < XP_THRESH_1) next = XP_THRESH_1;
+        else if (xp < XP_THRESH_2) next = XP_THRESH_2;
+        else if (xp < XP_THRESH_3) next = XP_THRESH_3;
+        
+        int bw = 80, bh = 6;
+        /* Coloca a barra exatamente no centro do ecrã (scr_w / 2) */
+        int bx = scr_w / 2 - bw / 2;
+        int by = 10; /* Alinhada com a altura do texto SCORE */
+        
+        /* Desenha a palavra "XP" ligeiramente à esquerda da barra */
+        draw_text("XP:", bx - 24, by - 1, 1, COL_TITLE);
+        
+        /* Desenha o fundo e o preenchimento da barra */
+        draw_rect(bx, by, bw, bh, COL_BTN_BG);
+        int fill = (xp >= next) ? bw : (xp * bw / next);
+        if (fill > 0) draw_rect(bx, by, fill, bh, COL_SHIELD);
+        
+        /* Contorno da barra */
+        draw_rect(bx,          by,          bw, 1, COL_OBS_TOP);
+        draw_rect(bx,          by + bh - 1, bw, 1, COL_OBS_TOP);
+        draw_rect(bx,          by,          1, bh, COL_OBS_TOP);
+        draw_rect(bx + bw - 1, by,          1, bh, COL_OBS_TOP);
+
+
 
     /* HUD: opponent score (2-player) */
     if (M->versus) {
@@ -311,13 +396,13 @@ static void render_gameover(void) {
 
     draw_text_sh("GAME OVER", scr_w/2 - 9*6*4/2, scr_h/4, 4, COL_GAMEOVER);
 
-    /* Made the persistent leaderboard this run? */
     if (!M->versus && M->last_rank >= 0) {
-        draw_text_c_sh("NEW HIGH SCORE!", scr_w/2, scr_h/4 + 44, 2, COL_SCORE);
+        if (M->last_rank == 0)
+            draw_text_c_sh("NEW HIGH SCORE!", scr_w/2, scr_h/4 + 44, 2, COL_SCORE);
         char rk[8];
         int_to_str(M->last_rank + 1, rk, sizeof(rk));
-        draw_text("RANK", scr_w/2 - 18, scr_h/4 + 68, 1, COL_SCORE);
-        draw_text(rk, scr_w/2 + 14, scr_h/4 + 68, 1, COL_SCORE);
+        draw_text("RANK", scr_w/2 - 18, M->last_rank == 0 ? scr_h/4 + 68 : scr_h/4 + 44, 1, COL_SCORE);
+        draw_text(rk,     scr_w/2 + 14, M->last_rank == 0 ? scr_h/4 + 68 : scr_h/4 + 44, 1, COL_SCORE);
     }
 
     char sbuf[16];
@@ -367,6 +452,107 @@ static void render_gameover(void) {
     draw_cursor();
 }
 
+/* -------------------------------------------------------------------
+ * render_name_input
+ * ------------------------------------------------------------------- */
+static void render_name_input(void) {
+    clear_buffer(COL_MENU_BG);
+
+    int box_w = 260, box_h = 140;
+    int box_x = scr_w/2 - box_w/2;
+    int box_y = scr_h/2 - box_h/2;
+    
+    /* Usamos COL_MENU_BG para a caixa para garantir que compila sem erros */
+    draw_rect(box_x, box_y, box_w, box_h, COL_MENU_BG);
+
+    draw_text_c("ACCOUNT LOGIN", scr_w/2, box_y + 15, 2, COL_TITLE);
+   
+    
+    /* Campo do Username */
+    draw_text("USER:", box_x + 20, box_y + 60, 1, COL_TITLE);
+    draw_text(M->input_name, box_x + 80, box_y + 60, 1, COL_TEXT);
+    if (!M->typing_password && (M->anim / 20) % 2 == 0) {
+        draw_rect(box_x + 80 + M->input_name_len * 6, box_y + 60, 2, 8, COL_SCORE);
+    }
+
+    /* Campo da Password (com Máscara) */
+    draw_text("PASS:", box_x + 20, box_y + 85, 1, COL_TITLE);
+    char masked_pass[16];
+    int p_len = M->input_password_len;
+    for(int i = 0; i < p_len; i++) masked_pass[i] = '*';
+    masked_pass[p_len] = '\0';
+    draw_text(masked_pass, box_x + 80, box_y + 85, 1, COL_TEXT);
+    if (M->typing_password && (M->anim / 20) % 2 == 0) {
+        draw_rect(box_x + 80 + p_len * 6, box_y + 85, 2, 8, COL_SCORE);
+    }
+
+    /* Feedback de Erro ou Instrução */
+    if (M->login_error) {
+        draw_text_c("WRONG PASSWORD!", scr_w/2, box_y + 115, 1, COL_TITLE);
+    } else {
+        if (!M->typing_password)
+            draw_text_c("PRESS ENTER FOR PASSWORD", scr_w/2, box_y + 115, 1, COL_TEXT);
+        else
+            draw_text_c("PRESS ENTER TO LOGIN", scr_w/2, box_y + 115, 1, COL_TEXT);
+    }
+}
+/* -------------------------------------------------------------------
+ * render_leaderboard
+ * Shared renderer for STATE_LEADERBOARD_TOP and STATE_LEADERBOARD_ALL.
+ * ------------------------------------------------------------------- */
+static void render_leaderboard(void) {
+    int i;
+    int x, y, w, h;
+    int lx = scr_w/2 - 220;
+    int ly = 80;
+
+    clear_buffer(COL_MENU_BG);
+
+    for (i = 0; i < 50; i++) {
+        int sx = (i * 97 + M->anim * (i % 2 + 1)) % scr_w;
+        int sy = (i * 73) % (scr_h - 60);
+        draw_rect(sx, sy, 2, 2, COL_STAR);
+    }
+
+    draw_text_c_sh("ALL SCORES", scr_w/2, 20, 3, COL_TITLE);
+
+    draw_text("RANK", lx,       ly, 1, COL_STAR);
+    draw_text("NAME", lx + 50,  ly, 1, COL_STAR);
+    draw_text("SCORE",lx + 160, ly, 1, COL_STAR);
+    draw_text("DATE", lx + 230, ly, 1, COL_STAR);
+    draw_rect(lx, ly + 12, 440, 1, COL_OBS_TOP);
+
+    {
+        int n = M->lb_count;
+        int start = M->lb_scroll;
+        int max_vis = (scr_h - ly - 80) / 16;
+        int end = start + max_vis;
+        if (end > n) end = n;
+
+        for (i = start; i < end; i++) {
+            int row_y = ly + 20 + (i - start) * 16;
+            uint32_t rc = (i == M->last_rank) ? COL_SCORE : COL_TEXT;
+            char rank_s[4], score_s[12];
+            int_to_str(i + 1, rank_s, sizeof(rank_s));
+            int_to_str(M->lb_entries[i].score, score_s, sizeof(score_s));
+            draw_text(rank_s,                lx,       row_y, 1, rc);
+            draw_text(M->lb_entries[i].name, lx + 50,  row_y, 1, rc);
+            draw_text(score_s,               lx + 160, row_y, 1, COL_SCORE);
+            draw_text(M->lb_entries[i].when, lx + 230, row_y, 1, COL_STAR);
+        }
+
+        if (n > max_vis)
+            draw_text_c("UP/DOWN TO SCROLL", scr_w/2, scr_h - 100, 1, COL_STAR);
+    }
+
+    back_btn_rect(scr_w, scr_h, &x, &y, &w, &h);
+    draw_button(x, y, w, h, "BACK", 2,
+                pt_in_rect(M->mouse_x, M->mouse_y, x, y, w, h));
+
+    draw_cursor();
+}
+
+
 /* Frozen play-field with a dimmed "PAUSED" overlay. */
 static void render_pause(void) {
     render_playing();
@@ -398,6 +584,9 @@ void view_render(const GameModel *m) {
         case STATE_PLAYING:      render_playing();      break;
         case STATE_PAUSE:        render_pause();        break;
         case STATE_GAMEOVER:     render_gameover();     break;
+        case STATE_NAME_INPUT:        render_name_input();            break;
+        case STATE_LEADERBOARD_TOP:
+        case STATE_LEADERBOARD_ALL:   render_leaderboard();           break;
         default:                                        break;
     }
 

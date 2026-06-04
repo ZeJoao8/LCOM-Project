@@ -8,6 +8,20 @@
 #include <stdlib.h>
 #include "game/model.h"
 #include "game/model_internal.h"
+#include "game/game.h"
+
+/* ── Power-aware helpers ──────────────────────────────────────────────────── */
+ 
+int model_coin_value(const GameModel *m) {
+    return game_has_power(POWER_DOUBLE_COINS) ? 2 : 1;
+}
+ 
+int model_missile_speed(const GameModel *m, int base_speed) {
+    if (game_has_power(POWER_SLOW_MISSILES))
+        return base_speed * 3 / 4;   /* 25% mais lento */
+    return base_speed;
+}
+
 
 /* ── World RNG — LCG used exclusively for obstacle/pickup generation ─────── */
 static uint32_t wrng_state = 1;
@@ -51,10 +65,20 @@ void model_init(GameModel *m, int scr_w, int scr_h, unsigned seed) {
     m->powerup_timer = 0;
     m->high_count = 0;        /* the glue layer loads the saved table */
     m->last_rank = -1;
-    m->difficulty = 1;          /* default: NORMAL */
-    m->control_mode = 0;        /* default: W / SPACE */
-    m->visual_effects = true;   /* default: ON */
-    m->initial_speed_fast = false; /* default: NORMAL */
+    m->xp_total        = 0;
+    m->powers_unlocked = 0;
+    m->extra_life_used = false;
+    m->input_name[0]     = '\0';  m->input_name_len     = 0;
+    m->input_password[0] = '\0';  m->input_password_len = 0;
+    m->typing_password   = false;
+    m->login_error       = false;
+    m->logged_in         = false;
+    m->lb_count        = 0;
+    m->lb_scroll       = 0;
+    m->difficulty = 1;
+    m->control_mode = 0;
+    m->visual_effects = true;
+    m->initial_speed_fast = false;
     for (int i = 0; i < MAX_PARTS; i++)    m->parts[i].active    = 0;
     for (int i = 0; i < MAX_POPUPS; i++)   m->popups[i].active   = 0;
     for (int i = 0; i < MAX_POWERUPS; i++) m->powerups[i].active = false;
@@ -85,6 +109,12 @@ void model_reset(GameModel *m) {
     m->magnet_timer = 0;
     m->powerup_timer = 0;
     m->last_rank = -1;
+    m->extra_life_used = false;   /*reset extra life por run */
+
+    /* POWER_SHIELD_START — dá shield no arranque de cada run */
+    if (game_has_power(POWER_SHIELD_START))
+        m->shield_timer = PU_DURATION;
+
 
     /* Opponent state for this round (versus flag is set by the controller). */
     m->opp_alive = true;
@@ -92,6 +122,13 @@ void model_reset(GameModel *m) {
     m->opp_score = 0;
     m->dead_sent = false;
     m->net_silence = 0;
+
+    if (m->input_name_len == 0) {
+        m->input_password[0] = '\0';
+        m->input_password_len = 0;
+        m->typing_password = false;
+    }
+    m->login_error = false;
 }
 
 void model_update(GameModel *m) {
@@ -175,12 +212,18 @@ void model_update(GameModel *m) {
             if (mi->warning == 0) {
                 mi->active = 1;
                 mi->x = m->scr_w;
-                mi->speed = MISSILE_SPEED + (m->scroll_speed / 2);
+
+                int base = MISSILE_SPEED + (m->scroll_speed / 2);
+
+                mi->speed = model_missile_speed(m, base);
             }
         }
         if (mi->active) {
             mi->x -= mi->speed;
-            if (mi->x + MISSILE_W < 0) mi->active = 0;
+            if (mi->x + MISSILE_W < 0){
+                 mi->active = 0;
+                game_add_xp(XP_PER_MISSILE);  /* XP por míssil esquivado */
+            } 
         }
     }
 
@@ -245,7 +288,13 @@ void model_update(GameModel *m) {
             m->player.y + PLAYER_H > m->coins[i].y &&
             m->player.y < m->coins[i].y + COIN_SIZE) {
             m->coins[i].active = false;
-            m->coins_collected++;
+
+            int val = model_coin_value(m);           /* FEATURE: 1 ou 2      */
+
+            m->coins_collected+= val;
+            
+            game_add_xp(XP_PER_COIN * val);           /* FEATURE: XP          */
+
             int ccx = m->coins[i].x + COIN_SIZE / 2, ccy = m->coins[i].y + COIN_SIZE / 2;
             for (int p = 0; p < COIN_PICK_PARTS; p++) {
                 uint32_t c = (p & 1) ? COL_COIN_SHINE : COL_COIN;   /* gold/white mix */
@@ -278,6 +327,8 @@ void model_update(GameModel *m) {
                 spawn_particle(m, pcx, pcy, (rand() % 11) - 5, (rand() % 11) - 5,
                                12 + rand() % 8, col);
             pu->active = false;
+
+            game_add_xp(XP_PER_POWERUP);   /* FEATURE: XP por power-up */
         }
     }
 
@@ -296,6 +347,15 @@ void model_update(GameModel *m) {
         if (!m->zaps[i].active) continue;
         if (zap_hits_player(m, &m->zaps[i])) {
             if (m->shield_timer > 0) break;          /* invulnerable: shrug it off */
+
+                        /* FEATURE: POWER_EXTRA_LIFE */
+            if (game_has_power(POWER_EXTRA_LIFE) && !m->extra_life_used) {
+                m->extra_life_used = true;
+                m->shield_timer = 90;   /* invulnerabilidade temporária */
+                break;
+            }
+
+
             player_explode(m); return;
         }
     }
@@ -313,6 +373,16 @@ void model_update(GameModel *m) {
                 burst(m, mi->x, mi->y + MISSILE_H / 2, EXPLODE_BURST_FIRE, COL_SHIELD);
                 continue;
             }
+
+            /* FEATURE: POWER_EXTRA_LIFE */
+            if (game_has_power(POWER_EXTRA_LIFE) && !m->extra_life_used) {
+                m->extra_life_used = true;
+                mi->active = 0;
+                m->shield_timer = 90;
+                continue;
+            }
+
+
             player_explode(m); return;
         }
     }

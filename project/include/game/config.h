@@ -82,13 +82,16 @@
 #define MAGNET_PULL           5   /* px a coin moves toward player/frame  */
 
 /* ── Persistent high-score table (RTC-timestamped, saved to disk) ─────────── */
-#define MAX_SCORES            5   /* leaderboard entries kept            */
+#define MAX_SCORES           100   /* leaderboard entries kept            */
 #define SCORE_WHEN_LEN       20   /* "DD/MM/YY HH:MM" + NUL              */
 #ifndef SCORES_PATH
 #define SCORES_PATH "/home/lcom/labs/project/data/jetpack_scores.txt"
 #endif
 #ifndef SETTINGS_PATH
 #define SETTINGS_PATH "/home/lcom/labs/project/data/jetpack_settings.txt"
+#endif
+#ifndef USERS_PATH
+#define USERS_PATH "/home/lcom/labs/project/data/users.txt"
 #endif
 
 /* ── Difficulty / scoring ─────────────────────────────────────────────────── */
@@ -190,5 +193,26 @@ static inline void back_btn_rect(int scr_w, int scr_h,
 static inline bool pt_in_rect(int px, int py, int x, int y, int w, int h) {
     return px >= x && px <= x + w && py >= y && py <= y + h;
 }
+
+/* ── CONFIGURAÇÃO: Limites de XP para desbloquear os Poderes ── */
+#define XP_THRESH_1   500
+#define XP_THRESH_2  1500
+#define XP_THRESH_3  3000
+#define XP_THRESH_4  6000
+
+/* ── CONFIGURAÇÃO: Recompensas de XP por eventos de jogo ── */
+#define XP_PER_COIN        5
+#define XP_PER_METER      10   /* por cada X frames de distância */
+#define XP_PER_POWERUP    20
+#define XP_PER_MISSILE    15   /* míssil esquivado */
+
+/* ── CONFIGURAÇÃO: Bitmask dos Poderes (Flags de Bits) ── */
+#define POWER_DOUBLE_COINS   (1 << 0)  /* Bit 0: 2x moedas */
+#define POWER_SHIELD_START   (1 << 1)  /* Bit 1: escudo no início */
+#define POWER_SLOW_MISSILES  (1 << 2)  /* Bit 2: mísseis mais lentos */
+#define POWER_EXTRA_LIFE     (1 << 3)  /* Bit 3: vida extra */
+
+
+#define MAX_PASSWORD_LEN 32
 
 #endif /* _GAME_CONFIG_H_ */

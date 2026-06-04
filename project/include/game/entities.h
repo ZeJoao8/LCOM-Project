@@ -13,6 +13,15 @@
 #include "game/game.h"      /* game_state_t */
 #include "game/config.h"    /* MAX_* sizes  */
 
+
+/* ── Tamanhos de string ───────────────────────────────────────────────────── */
+#define MAX_NAME_LEN    16   /* FEATURE: nome do jogador (15 chars + '\0')    */
+#define SCORE_WHEN_LEN  20   /* "DD/MM/YY HH:MM:SS" + '\0'                   */
+
+
+
+
+
 /** Vertical-only player; horizontal position is fixed at PLAYER_X. */
 typedef struct {
     int  y, vy;
@@ -64,6 +73,7 @@ typedef struct {
 
 /** One leaderboard row: a score and when it was achieved (from the RTC). */
 typedef struct {
+    char name[MAX_NAME_LEN];
     int  score;
     char when[SCORE_WHEN_LEN];   /* "DD/MM/YY HH:MM" */
 } ScoreEntry;
@@ -131,11 +141,30 @@ typedef struct {
     int        high_count;    /* number of valid entries in high_scores  */
     int        last_rank;     /* rank (0-based) this run earned, or -1   */
 
+    /* XP e Poderes */
+    int      xp_total;
+    uint32_t powers_unlocked;
+    bool     extra_life_used;
+
+    /* Login / name input state (STATE_NAME_INPUT) */
+    char input_name[MAX_NAME_LEN];
+    int  input_name_len;
+    char input_password[MAX_PASSWORD_LEN];
+    int  input_password_len;
+    bool typing_password;
+    bool login_error;
+    bool logged_in;
+
+    /* Leaderboard display cache */
+    ScoreEntry lb_entries[MAX_SCORES];
+    int        lb_count;
+    int        lb_scroll;
+
     /* Settings options */
-    int        difficulty;         /* 0 = EASY, 1 = NORMAL, 2 = HARD */
-    int        control_mode;       /* 0 = W / SPACE, 1 = UP / ENTER, 2 = Z / X */
-    bool       visual_effects;     /* true = ON, false = OFF */
-    bool       initial_speed_fast; /* true = FAST, false = NORMAL */
+    int        difficulty;
+    int        control_mode;
+    bool       visual_effects;
+    bool       initial_speed_fast;
 } GameModel;
 
 #endif /* _GAME_ENTITIES_H_ */
