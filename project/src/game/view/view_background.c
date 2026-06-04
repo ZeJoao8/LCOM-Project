@@ -69,6 +69,10 @@ static void draw_skyline(int scroll, int height_from_floor, int max_h, uint32_t 
 /* Procedural parallax backdrop: sky gradient, moon, stars, drifting clouds and
  * three scrolling skylines (far / near / foreground) for depth. */
 void draw_parallax(void) {
+    if (!M->visual_effects) {
+        draw_rect(0, 0, scr_w, scr_h - FLOOR_H, COL_BG);
+        return;
+    }
     int sky_h = scr_h - FLOOR_H;
     int bands = 8;
     for (int b = 0; b < bands; b++) {

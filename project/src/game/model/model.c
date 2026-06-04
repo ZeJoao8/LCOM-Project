@@ -23,6 +23,16 @@ int model_missile_speed(const GameModel *m, int base_speed) {
 }
 
 
+/* ── World RNG — LCG used exclusively for obstacle/pickup generation ─────── */
+static uint32_t wrng_state = 1;
+
+void world_rand_seed(uint32_t s) { wrng_state = s ? s : 1; }
+
+int world_rand(void) {
+    wrng_state = wrng_state * 1103515245u + 12345u;
+    return (int)((wrng_state >> 16) & 0x7FFF);
+}
+
 void model_init(GameModel *m, int scr_w, int scr_h, unsigned seed) {
     m->scr_w = scr_w;
     m->scr_h = scr_h;
@@ -44,26 +54,31 @@ void model_init(GameModel *m, int scr_w, int scr_h, unsigned seed) {
     m->opp_score = 0;
     m->dead_sent = false;
     m->net_silence = 0;
+    m->peer_seen = false;
+    m->peer_ready = false;
+    m->wait_ctr = 0;
+    m->my_seed   = 0;
+    m->peer_seed = 0;
+    world_rand_seed((uint32_t)seed);
     m->shield_timer = 0;
     m->magnet_timer = 0;
     m->powerup_timer = 0;
     m->high_count = 0;        /* the glue layer loads the saved table */
     m->last_rank = -1;
-
     m->xp_total        = 0;
     m->powers_unlocked = 0;
     m->extra_life_used = false;
-      /* Login state  */
     m->input_name[0]     = '\0';  m->input_name_len     = 0;
     m->input_password[0] = '\0';  m->input_password_len = 0;
     m->typing_password   = false;
     m->login_error       = false;
     m->logged_in         = false;
-
     m->lb_count        = 0;
     m->lb_scroll       = 0;
-
-
+    m->difficulty = 1;
+    m->control_mode = 0;
+    m->visual_effects = true;
+    m->initial_speed_fast = false;
     for (int i = 0; i < MAX_PARTS; i++)    m->parts[i].active    = 0;
     for (int i = 0; i < MAX_POPUPS; i++)   m->popups[i].active   = 0;
     for (int i = 0; i < MAX_POWERUPS; i++) m->powerups[i].active = false;
@@ -83,7 +98,7 @@ void model_reset(GameModel *m) {
     for (int i = 0; i < MAX_POWERUPS; i++) m->powerups[i].active = false;
     m->hit_flash = 0;
 
-    m->scroll_speed = SCROLL_SPEED_START;
+    m->scroll_speed = m->initial_speed_fast ? 5 : SCROLL_SPEED_START;
     m->score = 0;
     m->coins_collected = 0;
     m->frame_count = 0;
@@ -213,23 +228,55 @@ void model_update(GameModel *m) {
     }
 
     m->missile_timer++;
-    if (m->missile_timer >= MISSILE_WARN * 2) {
+    int missile_gap = MISSILE_WARN * 2;
+    int max_missiles = 2; /* NORMAL */
+    if (m->difficulty == 0) {
+        missile_gap = MISSILE_WARN * 4;   /* 4.0x gap for EASY */
+        max_missiles = 1;
+    } else if (m->difficulty == 2) {
+        missile_gap = MISSILE_WARN * 12 / 10; /* ~1.2x gap for HARD */
+        max_missiles = 3;
+    }
+
+    int active_missiles = 0;
+    for (int i = 0; i < MAX_MISSILES; i++) {
+        if (m->missiles[i].active || m->missiles[i].warning > 0) active_missiles++;
+    }
+
+    if (m->missile_timer >= missile_gap) {
         m->missile_timer = 0;
-        for (int i = 0; i < MAX_MISSILES; i++) {
-            if (m->missiles[i].warning == 0 && !m->missiles[i].active) {
-                m->missiles[i].warning = MISSILE_WARN;
-                m->missiles[i].y = 30 + (rand() % (m->scr_h - FLOOR_H - 60));
-                break;
+        if (active_missiles < max_missiles) {
+            for (int i = 0; i < MAX_MISSILES; i++) {
+                if (m->missiles[i].warning == 0 && !m->missiles[i].active) {
+                    m->missiles[i].warning = MISSILE_WARN;
+                    m->missiles[i].y = 30 + (world_rand() % (m->scr_h - FLOOR_H - 60));
+                    break;
+                }
             }
         }
     }
 
     /* Zapper spawn logic */
     m->spawn_timer++;
-    int spawn_interval = ZAPPER_GAP / m->scroll_speed;
+    int base_gap = ZAPPER_GAP;
+    if (m->difficulty == 0)      base_gap = ZAPPER_GAP * 3 / 2;      /* 1.5x gap for EASY */
+    else if (m->difficulty == 2) base_gap = ZAPPER_GAP * 7 / 10;     /* 0.7x gap for HARD */
+
+    int spawn_interval = base_gap / m->scroll_speed;
     if (spawn_interval < SPAWN_INTERVAL_MIN) spawn_interval = SPAWN_INTERVAL_MIN;
+
+    int active_zappers = 0;
+    for (int j = 0; j < MAX_ZAPPERS; j++) {
+        if (m->zaps[j].active) active_zappers++;
+    }
+    int max_zaps = 4; /* NORMAL */
+    if (m->difficulty == 0)      max_zaps = 2; /* EASY */
+    else if (m->difficulty == 2) max_zaps = 6; /* HARD */
+
     if (m->spawn_timer >= spawn_interval) {
-        spawn_zapper(m);
+        if (active_zappers < max_zaps) {
+            spawn_zapper(m);
+        }
         m->spawn_timer = 0;
     }
 

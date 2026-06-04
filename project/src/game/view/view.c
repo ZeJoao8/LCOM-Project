@@ -6,6 +6,7 @@
  *        never mutates game state.
  */
 #include <lcom/lcf.h>
+#include <stdio.h>                        /* snprintf */
 #include "game/view.h"
 #include "game/view_internal.h"
 #include "game/game.h"
@@ -22,10 +23,12 @@ static void render_menu(void) {
     clear_buffer(COL_MENU_BG);
 
     /* Decorative stars */
-    for (int i = 0; i < 50; i++) {
-        int sx = (i * 97 + M->anim * (i % 3 + 1)) % scr_w;
-        int sy = (i * 73) % (scr_h - 100);
-        draw_rect(sx, sy, 2, 2, COL_STAR);
+    if (M->visual_effects) {
+        for (int i = 0; i < 50; i++) {
+            int sx = (i * 97 + M->anim * (i % 3 + 1)) % scr_w;
+            int sy = (i * 73) % (scr_h - 100);
+            draw_rect(sx, sy, 2, 2, COL_STAR);
+        }
     }
 
     /* Animated player preview */
@@ -49,7 +52,7 @@ static void render_menu(void) {
         draw_text(hb, bx + 5*6*2, scr_h/4 + 92, 2, COL_SCORE);
     }
 
-    const char *labels[MENU_ITEMS] = {"PLAY", "2-PLAYER", "INSTRUCTIONS", "QUIT", "LEADERBOARD"};
+    const char *labels[MENU_ITEMS] = {"PLAY", "2-PLAYER", "INSTRUCTIONS", "SETTINGS", "LEADERBOARD", "QUIT"};
     for (int i = 0; i < MENU_ITEMS; i++) {
         int x, y, w, h;
         menu_btn_rect(scr_w, scr_h, i, &x, &y, &w, &h);
@@ -130,6 +133,41 @@ static void render_menu(void) {
     draw_cursor();
 }
 
+/* Lobby for 2-player: stay here until both peers exchange HELLO + READY. */
+static void render_waiting(void) {
+    clear_buffer(COL_MENU_BG);
+
+    /* Same decorative stars as the menu, for visual continuity. */
+    for (int i = 0; i < 50; i++) {
+        int sx = (i * 97 + M->anim * (i % 3 + 1)) % scr_w;
+        int sy = (i * 73) % (scr_h - 100);
+        draw_rect(sx, sy, 2, 2, COL_STAR);
+    }
+
+    /* Floating player preview (same idle bob as the title screen). */
+    int preview_y = scr_h/4 - 30 + ((M->anim / 16) % 2 == 0 ? -8 : 8);
+    draw_flame(scr_w/2 - PLAYER_W/2 + 1, preview_y + 33);
+    if (sprites_ok)
+        draw_sprite(player_pix, player_img,
+                    scr_w/2 - PLAYER_W/2, preview_y, PLAYER_SCALE);
+    else
+        draw_rect(scr_w/2 - PLAYER_W/2, preview_y, PLAYER_W, PLAYER_H, COL_PLAYER);
+
+    draw_text_c_sh("WAITING FOR PLAYER 2", scr_w/2, scr_h/2 - 10, 3, COL_TITLE);
+
+    const char *dots = ((M->anim / 20) % 3 == 0) ? "."
+                     : ((M->anim / 20) % 3 == 1) ? ".."
+                     :                              "...";
+    draw_text_c(dots, scr_w/2, scr_h/2 + 30, 3, COL_TEXT);
+
+    if (M->peer_seen && !M->peer_ready)
+        draw_text_c("PEER FOUND", scr_w/2, scr_h/2 + 70, 1, COL_P2);
+
+    draw_text_c("PRESS ESC TO CANCEL", scr_w/2, scr_h - 60, 1, COL_STAR);
+
+    draw_cursor();
+}
+
 static void render_instructions(void) {
     clear_buffer(COL_MENU_BG);
 
@@ -154,6 +192,36 @@ static void render_instructions(void) {
     int x, y, w, h;
     back_btn_rect(scr_w, scr_h, &x, &y, &w, &h);
     draw_button(x, y, w, h, "BACK", 2, pt_in_rect(M->mouse_x, M->mouse_y, x, y, w, h));
+
+    draw_cursor();
+}
+
+static void render_settings(void) {
+    clear_buffer(COL_MENU_BG);
+
+    draw_text_sh("SETTINGS", scr_w/2 - 8*6*3/2, 40, 3, COL_TITLE);
+
+    char diff_str[32];
+    const char *diff_names[3] = {"EASY", "NORMAL", "HARD"};
+    sprintf(diff_str, "DIFFICULTY: %s", diff_names[M->difficulty]);
+
+    char ctrl_str[32];
+    const char *ctrl_names[3] = {"W / SPACE", "UP / ENTER", "Z / X"};
+    sprintf(ctrl_str, "CONTROL: %s", ctrl_names[M->control_mode]);
+
+    char spd_str[32];
+    sprintf(spd_str, "START SPEED: %s", M->initial_speed_fast ? "FAST" : "NORMAL");
+
+    char eff_str[32];
+    sprintf(eff_str, "EFFECTS: %s", M->visual_effects ? "ON" : "OFF");
+
+    const char *labels[5] = {diff_str, ctrl_str, spd_str, eff_str, "BACK"};
+
+    for (int i = 0; i < 5; i++) {
+        int x, y, w, h;
+        settings_btn_rect(scr_w, scr_h, i, &x, &y, &w, &h);
+        draw_button(x, y, w, h, labels[i], 2, M->menu_sel == i);
+    }
 
     draw_cursor();
 }
@@ -314,8 +382,8 @@ static void render_playing(void) {
     if (M->versus) {
         char p2[16];
         int_to_str(M->opp_score, p2, sizeof(p2));
-        draw_text_c("P2", scr_w/2 - 30, 10, 1, COL_GHOST);
-        draw_text(p2, scr_w/2 - 10, 10, 1, COL_GHOST);
+        draw_text_c("P2", scr_w/2 - 30, 10, 1, COL_P2);
+        draw_text(p2, scr_w/2 - 10, 10, 1, COL_P2);
         if (!M->opp_alive)
             draw_text_c("P2 OUT", scr_w/2, 26, 1, COL_WARN);
     }
@@ -328,13 +396,13 @@ static void render_gameover(void) {
 
     draw_text_sh("GAME OVER", scr_w/2 - 9*6*4/2, scr_h/4, 4, COL_GAMEOVER);
 
-    /* Made the persistent leaderboard this run? */
     if (!M->versus && M->last_rank >= 0) {
-        draw_text_c_sh("NEW HIGH SCORE!", scr_w/2, scr_h/4 + 44, 2, COL_SCORE);
+        if (M->last_rank == 0)
+            draw_text_c_sh("NEW HIGH SCORE!", scr_w/2, scr_h/4 + 44, 2, COL_SCORE);
         char rk[8];
         int_to_str(M->last_rank + 1, rk, sizeof(rk));
-        draw_text("RANK", scr_w/2 - 18, scr_h/4 + 68, 1, COL_SCORE);
-        draw_text(rk, scr_w/2 + 14, scr_h/4 + 68, 1, COL_SCORE);
+        draw_text("RANK", scr_w/2 - 18, M->last_rank == 0 ? scr_h/4 + 68 : scr_h/4 + 44, 1, COL_SCORE);
+        draw_text(rk,     scr_w/2 + 14, M->last_rank == 0 ? scr_h/4 + 68 : scr_h/4 + 44, 1, COL_SCORE);
     }
 
     char sbuf[16];
@@ -357,10 +425,9 @@ static void render_gameover(void) {
 
     /* 2-player result (updates live as the opponent's DEAD packet arrives) */
     if (M->versus) {
-        char p2[16];
-        int_to_str(M->opp_score, p2, sizeof(p2));
-        draw_text("P2 SCORE:", scr_w/2 - 11*6/2, scr_h/2 + 14, 1, COL_GHOST);
-        draw_text(p2, scr_w/2 + 7*6 - 11*6/2, scr_h/2 + 14, 1, COL_GHOST);
+        char p2line[32];
+        snprintf(p2line, sizeof(p2line), "P2 SCORE: %d", M->opp_score);
+        draw_text_c(p2line, scr_w/2, scr_h/2 + 14, 1, COL_P2);
 
         const char *res; uint32_t rc;
         if (M->opp_alive)                  { res = "P2 STILL FLYING"; rc = COL_TEXT; }
@@ -433,71 +500,55 @@ static void render_name_input(void) {
  * render_leaderboard
  * Shared renderer for STATE_LEADERBOARD_TOP and STATE_LEADERBOARD_ALL.
  * ------------------------------------------------------------------- */
-static void render_leaderboard(int show_all) {
+static void render_leaderboard(void) {
     int i;
     int x, y, w, h;
     int lx = scr_w/2 - 220;
     int ly = 80;
- 
+
     clear_buffer(COL_MENU_BG);
- 
-    /* Stars background */
+
     for (i = 0; i < 50; i++) {
         int sx = (i * 97 + M->anim * (i % 2 + 1)) % scr_w;
         int sy = (i * 73) % (scr_h - 60);
         draw_rect(sx, sy, 2, 2, COL_STAR);
     }
- 
-    draw_text_c_sh(show_all ? "ALL SCORES" : "TOP 5 SCORES",
-                   scr_w/2, 20, 3, COL_TITLE);
- 
-    /* Column headers */
-    draw_text("RANK", lx,          ly, 1, COL_STAR);
-    draw_text("NAME", lx + 50,     ly, 1, COL_STAR);
-    draw_text("SCORE",lx + 160,    ly, 1, COL_STAR);
-    draw_text("DATE", lx + 230,    ly, 1, COL_STAR);
- 
-    /* Separator line */
+
+    draw_text_c_sh("ALL SCORES", scr_w/2, 20, 3, COL_TITLE);
+
+    draw_text("RANK", lx,       ly, 1, COL_STAR);
+    draw_text("NAME", lx + 50,  ly, 1, COL_STAR);
+    draw_text("SCORE",lx + 160, ly, 1, COL_STAR);
+    draw_text("DATE", lx + 230, ly, 1, COL_STAR);
     draw_rect(lx, ly + 12, 440, 1, COL_OBS_TOP);
- 
-    /* Entries */
+
     {
         int n = M->lb_count;
-        int start = show_all ? M->lb_scroll : 0;
+        int start = M->lb_scroll;
         int max_vis = (scr_h - ly - 80) / 16;
         int end = start + max_vis;
         if (end > n) end = n;
- 
+
         for (i = start; i < end; i++) {
-            int row_y  = ly + 20 + (i - start) * 16;
+            int row_y = ly + 20 + (i - start) * 16;
             uint32_t rc = (i == M->last_rank) ? COL_SCORE : COL_TEXT;
             char rank_s[4], score_s[12];
             int_to_str(i + 1, rank_s, sizeof(rank_s));
             int_to_str(M->lb_entries[i].score, score_s, sizeof(score_s));
- 
             draw_text(rank_s,                lx,       row_y, 1, rc);
             draw_text(M->lb_entries[i].name, lx + 50,  row_y, 1, rc);
             draw_text(score_s,               lx + 160, row_y, 1, COL_SCORE);
             draw_text(M->lb_entries[i].when, lx + 230, row_y, 1, COL_STAR);
         }
- 
-        /* Scroll hint */
-        if (show_all && n > max_vis)
+
+        if (n > max_vis)
             draw_text_c("UP/DOWN TO SCROLL", scr_w/2, scr_h - 100, 1, COL_STAR);
     }
- 
-    /* Toggle button: Top5 <-> All */
-    {
-        int bx = scr_w/2 - 100, by = scr_h - 78, bw = 200, bh = 24;
-        draw_button(bx, by, bw, bh,
-                    show_all ? "SHOW TOP 5" : "SHOW ALL",
-                    1, pt_in_rect(M->mouse_x, M->mouse_y, bx, by, bw, bh));
-    }
- 
+
     back_btn_rect(scr_w, scr_h, &x, &y, &w, &h);
     draw_button(x, y, w, h, "BACK", 2,
                 pt_in_rect(M->mouse_x, M->mouse_y, x, y, w, h));
- 
+
     draw_cursor();
 }
 
@@ -528,12 +579,14 @@ void view_render(const GameModel *m) {
     switch (m->state) {
         case STATE_MENU:         render_menu();         break;
         case STATE_INSTRUCTIONS: render_instructions(); break;
+        case STATE_SETTINGS:     render_settings();     break;
+        case STATE_WAITING:      render_waiting();      break;
         case STATE_PLAYING:      render_playing();      break;
         case STATE_PAUSE:        render_pause();        break;
         case STATE_GAMEOVER:     render_gameover();     break;
         case STATE_NAME_INPUT:        render_name_input();            break;
-        case STATE_LEADERBOARD_TOP:   render_leaderboard(0);          break;
-        case STATE_LEADERBOARD_ALL:   render_leaderboard(1);          break;
+        case STATE_LEADERBOARD_TOP:
+        case STATE_LEADERBOARD_ALL:   render_leaderboard();           break;
         default:                                        break;
     }
 

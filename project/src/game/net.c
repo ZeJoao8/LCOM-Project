@@ -1,25 +1,65 @@
 /**
  * @file net.c
- * @brief 2-player netplay protocol over the serial port. Parses incoming frames
- *        into the opponent's fields and periodically broadcasts our own state.
+ * @brief 2-player netplay protocol over the serial port. Atomic transmit
+ *        (a whole frame is enqueued only when it fits in the TX ring), CRC-8
+ *        error detection, and a sliding-window parser that re-syncs byte by
+ *        byte after corruption so a payload byte that happens to equal a sync
+ *        byte cannot lock the parser onto a false frame.
+ *
+ * Frame layout: SYNC0(0xA5) SYNC1(0x5A) TYPE LEN B0..B(LEN-1) CRC8
+ *   CRC8 = poly 0x07, init 0, covers TYPE, LEN, and the LEN payload bytes.
  */
+#include <stddef.h>    /* NULL */
 #include "game/net.h"
 #include "devices/serial/serial.h"
 
-#define NET_SYNC   0xA5
+/* ── Frame format constants ──────────────────────────────────────────────── */
+#define SYNC0 0xA5
+#define SYNC1 0x5A
+
 #define NET_STATE  1
 #define NET_DEAD   2
+#define NET_HELLO  3
+#define NET_READY  4
+#define NET_BYE    5
 
-/* ── Transmit ─────────────────────────────────────────────────────────────── */
-static void net_send(uint8_t type, uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3) {
-    uint8_t chk = type ^ b0 ^ b1 ^ b2 ^ b3;
-    serial_putc(NET_SYNC);
-    serial_putc(type);
-    serial_putc(b0);
-    serial_putc(b1);
-    serial_putc(b2);
-    serial_putc(b3);
-    serial_putc(chk);
+#define HDR_LEN     2     /* SYNC0 SYNC1 */
+#define META_LEN    2     /* TYPE LEN    */
+#define CRC_LEN     1
+#define FRAME_OVHD  (HDR_LEN + META_LEN + CRC_LEN)   /* 5 */
+
+/* ── CRC-8 (poly 0x07, init 0) ───────────────────────────────────────────── */
+static uint8_t crc8(const uint8_t *d, int n) {
+    uint8_t c = 0;
+    for (int i = 0; i < n; i++) {
+        c ^= d[i];
+        for (int k = 0; k < 8; k++)
+            c = (c & 0x80) ? (uint8_t)((c << 1) ^ 0x07) : (uint8_t)(c << 1);
+    }
+    return c;
+}
+
+/* ── Transmit ────────────────────────────────────────────────────────────── */
+/* Push the whole frame only if it all fits; otherwise drop the frame. The
+ * caller never observes a torn frame on the wire. */
+static void net_send_frame(uint8_t type, const uint8_t *payload, uint8_t len) {
+    if (len > NET_MAX_PAYLOAD) return;
+
+    int total = FRAME_OVHD + len;
+    if (serial_tx_free() < total) {
+        serial_tx_count_drop();
+        return;
+    }
+
+    uint8_t frame[FRAME_OVHD + NET_MAX_PAYLOAD];
+    frame[0] = SYNC0;
+    frame[1] = SYNC1;
+    frame[2] = type;
+    frame[3] = len;
+    for (uint8_t i = 0; i < len; i++) frame[4 + i] = payload[i];
+    frame[4 + len] = crc8(&frame[2], META_LEN + len);
+
+    for (int i = 0; i < total; i++) serial_putc(frame[i]);   /* guaranteed to fit */
 }
 
 static uint16_t clamp16(int v) {
@@ -28,72 +68,171 @@ static uint16_t clamp16(int v) {
     return (uint16_t) v;
 }
 
+static void net_send_state(int y, int score, uint16_t seed) {
+    uint16_t ye = clamp16(y), sc = clamp16(score);
+    uint8_t p[6] = { (uint8_t)(ye >> 8), (uint8_t)(ye & 0xFF),
+                     (uint8_t)(sc >> 8), (uint8_t)(sc & 0xFF),
+                     (uint8_t)(seed >> 8), (uint8_t)(seed & 0xFF) };
+    net_send_frame(NET_STATE, p, 6);
+}
+
+static void net_send_dead(int score) {
+    uint16_t sc = clamp16(score);
+    uint8_t p[2] = { (uint8_t)(sc >> 8), (uint8_t)(sc & 0xFF) };
+    net_send_frame(NET_DEAD, p, 2);
+}
+
+static void net_send_hello(uint16_t seed) {
+    uint8_t p[2] = { (uint8_t)(seed >> 8), (uint8_t)(seed & 0xFF) };
+    net_send_frame(NET_HELLO, p, 2);
+}
+static void net_send_ready(uint16_t seed) {
+    uint8_t p[2] = { (uint8_t)(seed >> 8), (uint8_t)(seed & 0xFF) };
+    net_send_frame(NET_READY, p, 2);
+}
+
+void net_send_bye(void) { net_send_frame(NET_BYE, NULL, 0); }
+
+/* ── Per-tick broadcaster ────────────────────────────────────────────────── */
 void net_tick(GameModel *m) {
     if (!m->versus) return;
 
-    /* If the peer has gone quiet for too long (cable pulled, crash), treat it
-     * as out so the round can resolve instead of waiting forever. */
+    static int hello_ctr = 0;
+    static int state_ctr = 0;
+
+    if (m->state == STATE_WAITING) {
+        m->wait_ctr++;
+        if (++hello_ctr >= NET_HELLO_INTERVAL) {
+            hello_ctr = 0;
+            net_send_hello(m->my_seed);
+            if (m->peer_seen) net_send_ready(m->my_seed);
+        }
+        return;     /* no STATE, DEAD or peer-silence handling while waiting */
+    }
+
+    /* In PLAYING/GAMEOVER, a long silence on the wire is treated as the peer
+     * having dropped out so the round can resolve. */
     if (m->opp_alive && m->state != STATE_MENU) {
         if (++m->net_silence > NET_PEER_TIMEOUT)
             m->opp_alive = false;
     }
 
-    static int send_ctr = 0;
     if (m->state == STATE_PLAYING) {
-        if (++send_ctr >= NET_SEND_INTERVAL) {
-            send_ctr = 0;
-            uint16_t y  = clamp16(m->player.y);
-            uint16_t sc = clamp16(m->score);
-            net_send(NET_STATE, y >> 8, y & 0xFF, sc >> 8, sc & 0xFF);
+        if (++state_ctr >= NET_SEND_INTERVAL) {
+            state_ctr = 0;
+            net_send_state(m->player.y, m->score, m->my_seed);
         }
     }
 
     if (m->state == STATE_GAMEOVER && !m->dead_sent) {
-        uint16_t sc = clamp16(m->score);
-        net_send(NET_DEAD, sc >> 8, sc & 0xFF, 0, 0);
+        net_send_dead(m->score);
         m->dead_sent = true;
     }
 }
 
-/* ── Receive (frame parser) ───────────────────────────────────────────────── */
-static void net_apply(GameModel *m, uint8_t type, const uint8_t *p) {
-    m->net_silence = 0;                 /* a valid frame just arrived */
-    if (type == NET_STATE) {
-        m->opp_y     = (p[0] << 8) | p[1];
-        m->opp_score = (p[2] << 8) | p[3];
-        m->opp_alive = true;
-    } else if (type == NET_DEAD) {
-        m->opp_score = (p[0] << 8) | p[1];
-        m->opp_alive = false;
+/* ── Receive (sliding-window parser) ─────────────────────────────────────── */
+#define NET_FBUF 16
+static uint8_t fbuf[NET_FBUF];
+static int     flen = 0;
+
+static void shift_one(void) {
+    for (int i = 1; i < flen; i++) fbuf[i - 1] = fbuf[i];
+    flen--;
+}
+
+static void shift_n(int n) {
+    if (n <= 0) return;
+    if (n >= flen) { flen = 0; return; }
+    for (int i = n; i < flen; i++) fbuf[i - n] = fbuf[i];
+    flen -= n;
+}
+
+void net_reset_parser(void) {
+    flen = 0;
+}
+
+/* Apply a validated frame's effect on the model. NET_STATE and NET_DEAD are
+ * only ever sent by a peer that has left WAITING, so receiving one while we
+ * are still in WAITING is conclusive proof that the peer is ready to play —
+ * we promote both handshake flags so the game.c transition fires this tick.
+ * Likewise NET_READY implies NET_HELLO. */
+static void net_apply(GameModel *m, uint8_t type, const uint8_t *p, uint8_t len) {
+    m->net_silence = 0;
+    switch (type) {
+        case NET_STATE:
+            if (len >= 4) {
+                m->opp_y     = (p[0] << 8) | p[1];
+                m->opp_score = (p[2] << 8) | p[3];
+                m->opp_alive = true;
+            }
+            if (m->state == STATE_WAITING) {
+                if (len >= 6)
+                    m->peer_seed = (uint16_t)((p[4] << 8) | p[5]);
+                m->peer_seen = true; m->peer_ready = true;
+            }
+            break;
+        case NET_DEAD:
+            if (len >= 2) {
+                m->opp_score = (p[0] << 8) | p[1];
+                m->opp_alive = false;
+            }
+            if (m->state == STATE_WAITING) {
+                m->peer_seen = true; m->peer_ready = true;
+            }
+            break;
+        case NET_HELLO:
+            if (m->state == STATE_WAITING) {
+                if (len >= 2)
+                    m->peer_seed = (uint16_t)((p[0] << 8) | p[1]);
+                m->peer_seen = true;
+            }
+            break;
+        case NET_READY:
+            if (m->state == STATE_WAITING) {
+                if (len >= 2)
+                    m->peer_seed = (uint16_t)((p[0] << 8) | p[1]);
+                m->peer_seen = true; m->peer_ready = true;
+            }
+            break;
+        case NET_BYE:
+            if (m->state == STATE_WAITING) m->state = STATE_MENU;
+            else                            m->opp_alive = false;
+            break;
+        default:
+            break;     /* unknown TYPE: silently ignored */
     }
 }
 
 void net_poll(GameModel *m) {
     if (!m->versus) return;
 
-    /* Frame parser state (persists across calls). */
-    static int     st = 0;      /* 0=sync,1=type,2..5=payload,6=checksum */
-    static uint8_t type = 0;
-    static uint8_t pay[4];
-    static int     idx = 0;
-
+    /* Drain the RX ring into fbuf, dropping the oldest byte when full. */
     int c;
     while ((c = serial_getc()) >= 0) {
-        uint8_t b = (uint8_t) c;
-        switch (st) {
-            case 0: if (b == NET_SYNC) st = 1;            break;
-            case 1: type = b; idx = 0; st = 2;            break;
-            case 2: case 3: case 4: case 5:
-                pay[idx++] = b;
-                st = (idx >= 4) ? 6 : st + 1;
-                break;
-            case 6: {
-                uint8_t chk = type ^ pay[0] ^ pay[1] ^ pay[2] ^ pay[3];
-                if (chk == b) net_apply(m, type, pay);    /* else: drop frame */
-                st = 0;
-                break;
-            }
-            default: st = 0; break;
-        }
+        if (flen >= NET_FBUF) shift_one();
+        fbuf[flen++] = (uint8_t) c;
+    }
+
+    /* Try to parse one frame at a time from fbuf[0]. On any mismatch slide
+     * forward by exactly one byte so a real SYNC0 SYNC1 lurking inside what
+     * looked like payload still gets a chance. */
+    while (flen > 0) {
+        if (fbuf[0] != SYNC0) { shift_one(); continue; }
+        if (flen < 2)         break;
+        if (fbuf[1] != SYNC1) { shift_one(); continue; }
+        if (flen < 4)         break;                  /* need TYPE + LEN */
+
+        uint8_t type = fbuf[2];
+        uint8_t len  = fbuf[3];
+        if (len > NET_MAX_PAYLOAD) { shift_one(); continue; }
+
+        int total = FRAME_OVHD + len;
+        if (flen < total) break;                      /* incomplete: wait for more */
+
+        uint8_t want = crc8(&fbuf[2], META_LEN + len);
+        if (want != fbuf[4 + len]) { shift_one(); continue; }
+
+        net_apply(m, type, &fbuf[4], len);
+        shift_n(total);
     }
 }

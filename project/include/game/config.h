@@ -85,7 +85,13 @@
 #define MAX_SCORES           100   /* leaderboard entries kept            */
 #define SCORE_WHEN_LEN       20   /* "DD/MM/YY HH:MM" + NUL              */
 #ifndef SCORES_PATH
-#define SCORES_PATH "/home/lcom/labs/project/data/jetpack_scores.txt"  /* change for your VM */
+#define SCORES_PATH "/home/lcom/labs/project/data/jetpack_scores.txt"
+#endif
+#ifndef SETTINGS_PATH
+#define SETTINGS_PATH "/home/lcom/labs/project/data/jetpack_settings.txt"
+#endif
+#ifndef USERS_PATH
+#define USERS_PATH "/home/lcom/labs/project/data/users.txt"
 #endif
 
 /* ── Difficulty / scoring ─────────────────────────────────────────────────── */
@@ -117,6 +123,7 @@
 #define COL_BTN_BG     0x1A1A3A  /* idle button background */
 #define COL_BTN_HI     0xFFFFFF  /* highlighted text       */
 #define COL_GHOST      0x3CC8FF  /* opponent ghost (2-player) */
+#define COL_P2         0x3366FF  /* solid blue for the P2 label / HUD       */
 #define COL_SHIELD     0x33CCFF  /* shield power-up + aura */
 #define COL_MAGNET     0xC061FF  /* magnet power-up */
 #define COL_SHADOW     0x0A0A12  /* text drop-shadow */
@@ -140,11 +147,13 @@
 #define FLOOR_TILE     48        /* width of one scrolling floor tile (px)      */
 
 /* ── Netplay (serial 2-player) ────────────────────────────────────────────── */
-#define NET_SEND_INTERVAL 3      /* frames between state broadcasts */
-#define NET_PEER_TIMEOUT 240     /* frames without a packet => peer is "out" */
+#define NET_SEND_INTERVAL  3      /* frames between state broadcasts */
+#define NET_PEER_TIMEOUT  240     /* frames without a packet => peer is "out" */
+#define NET_HELLO_INTERVAL 10     /* frames between HELLO/READY beacons in WAITING */
+#define NET_MAX_PAYLOAD    8      /* upper bound on a packet's payload length */
 
 /* ── Menu / button geometry ───────────────────────────────────────────────── */
-#define MENU_ITEMS          5
+#define MENU_ITEMS          6
 #define BTN_W             240
 #define BTN_H              30
 #define BTN_GAP            50
@@ -159,7 +168,16 @@ static inline void menu_btn_rect(int scr_w, int scr_h, int idx,
     *w = BTN_W;
     *h = BTN_H;
     *x = scr_w / 2 - BTN_W / 2;
-    *y = scr_h / 2 + BTN_START_Y_OFF + idx * BTN_GAP;
+    *y = scr_h / 2 - 40 + idx * 40;
+}
+
+/** Rectangle of settings button @p idx, centred for the given screen size. */
+static inline void settings_btn_rect(int scr_w, int scr_h, int idx,
+                                     int *x, int *y, int *w, int *h) {
+    *w = 320;
+    *h = BTN_H;
+    *x = scr_w / 2 - 320 / 2;
+    *y = scr_h / 2 - 100 + idx * 45;
 }
 
 /** Rectangle of the BACK button (instructions / game-over screens). */

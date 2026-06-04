@@ -54,15 +54,16 @@
 #define SER_HOOK_ID 5    /* keep distinct from timer/kbd/mouse/rtc hooks */
 #define BAUD_DIV  1      /* 115200 baud (115200 / 1) */
 
-#define RING 256
+#define RING 512
 static volatile uint8_t rx_buf[RING];
 static volatile uint8_t tx_buf[RING];
 static volatile int rx_head = 0, rx_tail = 0;
 static volatile int tx_head = 0, tx_tail = 0;
 
 /* Diagnostics: counted in the ISR, never block the data path. */
-static volatile int rx_dropped = 0;   /* bytes lost to a full RX ring   */
-static volatile int line_errors = 0;  /* LSR overrun/framing/parity/break */
+static volatile int rx_dropped = 0;          /* bytes lost to a full RX ring   */
+static volatile int line_errors = 0;         /* LSR overrun/framing/parity/break */
+static volatile int tx_dropped_frames = 0;   /* frames rejected by the caller for atomicity */
 
 static int serial_hook_id = SER_HOOK_ID;
 
@@ -133,7 +134,7 @@ int serial_config(void) {
     ser_out(SER_MCR, MCR_DTR | MCR_RTS | MCR_OUT2);
 
     rx_head = rx_tail = tx_head = tx_tail = 0;
-    rx_dropped = line_errors = 0;
+    rx_dropped = line_errors = tx_dropped_frames = 0;
 
     /* Enable received-data-available and line-status (error) interrupts. */
     ser_out(SER_IER, IER_RDA | IER_LS);
@@ -184,3 +185,16 @@ bool serial_available(void) {
 
 int serial_rx_dropped(void) { return rx_dropped; }
 int serial_line_errors(void) { return line_errors; }
+
+int serial_tx_free(void) {
+    int h = tx_head, t = tx_tail;
+    int used = (h - t + RING) % RING;
+    return RING - 1 - used;            /* one slot is reserved to distinguish full from empty */
+}
+
+void serial_rx_drain(void) {
+    rx_head = rx_tail = 0;             /* atomic enough at our cadence; ISR refills as needed */
+}
+
+int  serial_tx_dropped_frames(void) { return tx_dropped_frames; }
+void serial_tx_count_drop(void)     { tx_dropped_frames++; }

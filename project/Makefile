@@ -2,7 +2,7 @@ PROG=proj
 
 # 1. List ONLY the file names, without any folder paths!
 SRCS = main.c timer.c kbc.c mouse.c video_gr.c utils.c rtc.c serial.c \
-       game.c controller.c net.c scores.c \
+       game.c controller.c net.c scores.c settings.c \
        model.c model_geometry.c model_effects.c model_spawn.c \
        view.c view_draw.c view_sprites.c view_world.c view_background.c view_ui.c
 

@@ -13,6 +13,7 @@
 #include "game/controller.h"
 #include "game/net.h"
 #include "game/scores.h"
+#include "game/settings.h"
 #include "devices/video_gr/video_gr.h"   /* h_res, v_res */
 #include "devices/rtc/rtc.h"
 
@@ -21,8 +22,8 @@ static GameModel M;
 
 
 int game_authenticate_user(const char *name, const char *password) {
-    /* Usamos "users.txt" direto para criar na pasta do jogo, evitando erros de permissões */
-    FILE *f = fopen("users.txt", "r");
+    /* Usamos USERS_PATH direto para criar na pasta do jogo, evitando erros de permissões */
+    FILE *f = fopen(USERS_PATH, "r");
     
     char f_name[32], f_pass[32];
     int f_xp;
@@ -43,7 +44,7 @@ int game_authenticate_user(const char *name, const char *password) {
     }
 
     /* Se chegou aqui, a conta não existe. Vamos criá-la (Append mode "a") */
-    f = fopen("users.txt", "a");
+    f = fopen(USERS_PATH, "a");
     if (!f) return 0; /* Falha de segurança caso o disco esteja protegido */
     
     fprintf(f, "%s %s %d\n", name, password, 0);
@@ -57,7 +58,7 @@ void game_save_user_xp_to_disk(const char *name, int new_xp) {
     bool found = false;
 
     /* 1. Lemos todos os utilizadores existentes */
-    FILE *f = fopen("users.txt", "r");
+    FILE *f = fopen(USERS_PATH, "r");
     if (f) {
         while (count < 100 && fscanf(f, "%s %s %d", names[count], passes[count], &xps[count]) == 3) {
             if (strcmp(names[count], name) == 0) {
@@ -78,7 +79,7 @@ void game_save_user_xp_to_disk(const char *name, int new_xp) {
     }
 
     /* 3. Gravamos a lista atualizada de volta para o ficheiro */
-    f = fopen("users.txt", "w");
+    f = fopen(USERS_PATH, "w");
     if (f) {
         for (int i = 0; i < count; i++) {
             fprintf(f, "%s %s %d\n", names[i], passes[i], xps[i]);
@@ -90,28 +91,18 @@ void game_save_user_xp_to_disk(const char *name, int new_xp) {
 void game_init(void) {
     model_init(&M, h_res, v_res, rtc_seed());   /* logic + RNG seeded by RTC */
     scores_load(M.high_scores, &M.high_count, MAX_SCORES);  /* persistent leaderboard */
-
-
-       /* XP/powers start at 0; loaded after login in controller */
+    settings_load(&M);
     M.xp_total        = 0;
     M.powers_unlocked = 0;
     M.extra_life_used = false;
- 
-    /* Login state */
     M.input_name[0]      = '\0';  M.input_name_len      = 0;
     M.input_password[0]  = '\0';  M.input_password_len  = 0;
     M.typing_password    = false;
     M.login_error        = false;
     M.logged_in          = false;
- 
-    /* Leaderboard cache */
     M.lb_count  = 0;
     M.lb_scroll = 0;
- 
-    /* Start at login screen */
     M.state = STATE_NAME_INPUT;
-
-
     view_init();                                /* load sprites (mode already set) */
     game_on_rtc();                              /* prime the clock immediately */
 }
@@ -195,6 +186,18 @@ void game_update(void) {
     model_update(&M);
     net_poll(&M);    /* apply any opponent packets that arrived */
     net_tick(&M);    /* broadcast our state in 2-player mode    */
+
+    /* WAITING → PLAYING: both peers have HELLOed and READYed. Refresh the
+     * round (model_reset clears handshake fields too, hence the restore) and
+     * start playing on the same frame on both sides. */
+    if (M.state == STATE_WAITING && M.peer_seen && M.peer_ready) {
+        bool was_versus = M.versus;
+        uint32_t agreed = (uint32_t)M.my_seed ^ (uint32_t)M.peer_seed;
+        world_rand_seed(agreed);    /* sync obstacle RNG on both machines */
+        model_reset(&M);
+        M.versus = was_versus;
+        M.state = STATE_PLAYING;
+    }
 
     /* On entering game-over from a solo run, persist the score with the RTC
      * timestamp captured for this run. */

@@ -129,34 +129,42 @@ typedef struct {
     bool dead_sent;       /* our DEAD packet already sent this round   */
     int  net_silence;     /* frames since the last packet from the peer */
 
+    /* Handshake state, valid while STATE_WAITING. Owned by start_game. */
+    bool     peer_seen;   /* we received a HELLO since entering WAITING */
+    bool     peer_ready;  /* we received a READY since entering WAITING */
+    int      wait_ctr;    /* frames spent in WAITING (UI + send cadence) */
+    uint16_t my_seed;     /* local RNG seed generated at start_game, sent to peer */
+    uint16_t peer_seed;   /* peer's seed, received via HELLO/READY/STATE */
+
     /* Persistent leaderboard (loaded/saved by the glue layer). */
     ScoreEntry high_scores[MAX_SCORES];
     int        high_count;    /* number of valid entries in high_scores  */
     int        last_rank;     /* rank (0-based) this run earned, or -1   */
 
-    
-    /* XP e Poderes ──────────────────────────────────────────── */
-    int      xp_total;         /* XP acumulado entre todas as sessões        */
-    uint32_t powers_unlocked;  /* bitmask POWER_* desbloqueados              */
-    bool     extra_life_used;  /* POWER_EXTRA_LIFE já foi consumido nesta run */
- 
-        /* Login / name input state (STATE_NAME_INPUT) */
+    /* XP e Poderes */
+    int      xp_total;
+    uint32_t powers_unlocked;
+    bool     extra_life_used;
+
+    /* Login / name input state (STATE_NAME_INPUT) */
     char input_name[MAX_NAME_LEN];
     int  input_name_len;
     char input_password[MAX_PASSWORD_LEN];
     int  input_password_len;
-    bool typing_password;   /* false = filling name, true = filling password */
-    bool login_error;       /* wrong password flag */
-    bool logged_in;         /* a user is authenticated for this session      */
+    bool typing_password;
+    bool login_error;
+    bool logged_in;
 
-
-    
     /* Leaderboard display cache */
+    ScoreEntry lb_entries[MAX_SCORES];
+    int        lb_count;
+    int        lb_scroll;
 
-    ScoreEntry lb_entries[MAX_SCORES];  /* entradas a apresentar no ecrã     */
-    int        lb_count;                /* quantas entradas em lb_entries     */
-    int        lb_scroll;               /* offset de scroll (STATE_LB_ALL)   */
-
+    /* Settings options */
+    int        difficulty;
+    int        control_mode;
+    bool       visual_effects;
+    bool       initial_speed_fast;
 } GameModel;
 
 #endif /* _GAME_ENTITIES_H_ */

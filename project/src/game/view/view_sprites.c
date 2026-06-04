@@ -11,6 +11,7 @@
 /* 24-bit XPMs. '.' = #FF00FF is the transparency colour handled by vg_draw_pixmap.
  * Sprite pixel data lives in src/img / *.xpm (standard X PixMap files). */
 #include "player.xpm"
+#include "player_p2.xpm"
 #include "coin0.xpm"
 #include "coin1.xpm"
 #include "coin2.xpm"
@@ -24,6 +25,8 @@
 bool        sprites_ok = false;
 uint8_t    *player_pix = NULL;
 xpm_image_t player_img;
+uint8_t    *player_p2_pix = NULL;
+xpm_image_t player_p2_img;
 uint8_t    *coin_pix[COIN_FRAMES] = { NULL };
 xpm_image_t coin_img[COIN_FRAMES];
 uint8_t    *missile_pix = NULL;
@@ -36,7 +39,8 @@ uint8_t    *magnet_pix = NULL;
 xpm_image_t magnet_img;
 
 void view_init(void) {
-    player_pix  = xpm_load((xpm_map_t) player_xpm,  XPM_8_8_8, &player_img);
+    player_pix    = xpm_load((xpm_map_t) player_xpm,    XPM_8_8_8, &player_img);
+    player_p2_pix = xpm_load((xpm_map_t) player_p2_xpm, XPM_8_8_8, &player_p2_img);
     coin_pix[0] = xpm_load((xpm_map_t) coin_xpm0,   XPM_8_8_8, &coin_img[0]);
     coin_pix[1] = xpm_load((xpm_map_t) coin_xpm1,   XPM_8_8_8, &coin_img[1]);
     coin_pix[2] = xpm_load((xpm_map_t) coin_xpm2,   XPM_8_8_8, &coin_img[2]);
