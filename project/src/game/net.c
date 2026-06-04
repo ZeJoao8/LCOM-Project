@@ -68,11 +68,12 @@ static uint16_t clamp16(int v) {
     return (uint16_t) v;
 }
 
-static void net_send_state(int y, int score) {
+static void net_send_state(int y, int score, uint16_t seed) {
     uint16_t ye = clamp16(y), sc = clamp16(score);
-    uint8_t p[4] = { (uint8_t)(ye >> 8), (uint8_t)(ye & 0xFF),
-                     (uint8_t)(sc >> 8), (uint8_t)(sc & 0xFF) };
-    net_send_frame(NET_STATE, p, 4);
+    uint8_t p[6] = { (uint8_t)(ye >> 8), (uint8_t)(ye & 0xFF),
+                     (uint8_t)(sc >> 8), (uint8_t)(sc & 0xFF),
+                     (uint8_t)(seed >> 8), (uint8_t)(seed & 0xFF) };
+    net_send_frame(NET_STATE, p, 6);
 }
 
 static void net_send_dead(int score) {
@@ -81,8 +82,14 @@ static void net_send_dead(int score) {
     net_send_frame(NET_DEAD, p, 2);
 }
 
-static void net_send_hello(void) { net_send_frame(NET_HELLO, NULL, 0); }
-static void net_send_ready(void) { net_send_frame(NET_READY, NULL, 0); }
+static void net_send_hello(uint16_t seed) {
+    uint8_t p[2] = { (uint8_t)(seed >> 8), (uint8_t)(seed & 0xFF) };
+    net_send_frame(NET_HELLO, p, 2);
+}
+static void net_send_ready(uint16_t seed) {
+    uint8_t p[2] = { (uint8_t)(seed >> 8), (uint8_t)(seed & 0xFF) };
+    net_send_frame(NET_READY, p, 2);
+}
 
 void net_send_bye(void) { net_send_frame(NET_BYE, NULL, 0); }
 
@@ -97,8 +104,8 @@ void net_tick(GameModel *m) {
         m->wait_ctr++;
         if (++hello_ctr >= NET_HELLO_INTERVAL) {
             hello_ctr = 0;
-            net_send_hello();
-            if (m->peer_seen) net_send_ready();
+            net_send_hello(m->my_seed);
+            if (m->peer_seen) net_send_ready(m->my_seed);
         }
         return;     /* no STATE, DEAD or peer-silence handling while waiting */
     }
@@ -113,7 +120,7 @@ void net_tick(GameModel *m) {
     if (m->state == STATE_PLAYING) {
         if (++state_ctr >= NET_SEND_INTERVAL) {
             state_ctr = 0;
-            net_send_state(m->player.y, m->score);
+            net_send_state(m->player.y, m->score, m->my_seed);
         }
     }
 
@@ -159,6 +166,8 @@ static void net_apply(GameModel *m, uint8_t type, const uint8_t *p, uint8_t len)
                 m->opp_alive = true;
             }
             if (m->state == STATE_WAITING) {
+                if (len >= 6)
+                    m->peer_seed = (uint16_t)((p[4] << 8) | p[5]);
                 m->peer_seen = true; m->peer_ready = true;
             }
             break;
@@ -172,10 +181,16 @@ static void net_apply(GameModel *m, uint8_t type, const uint8_t *p, uint8_t len)
             }
             break;
         case NET_HELLO:
-            if (m->state == STATE_WAITING) m->peer_seen = true;
+            if (m->state == STATE_WAITING) {
+                if (len >= 2)
+                    m->peer_seed = (uint16_t)((p[0] << 8) | p[1]);
+                m->peer_seen = true;
+            }
             break;
         case NET_READY:
             if (m->state == STATE_WAITING) {
+                if (len >= 2)
+                    m->peer_seed = (uint16_t)((p[0] << 8) | p[1]);
                 m->peer_seen = true; m->peer_ready = true;
             }
             break;

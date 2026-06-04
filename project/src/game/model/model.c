@@ -9,6 +9,16 @@
 #include "game/model.h"
 #include "game/model_internal.h"
 
+/* ── World RNG — LCG used exclusively for obstacle/pickup generation ─────── */
+static uint32_t wrng_state = 1;
+
+void world_rand_seed(uint32_t s) { wrng_state = s ? s : 1; }
+
+int world_rand(void) {
+    wrng_state = wrng_state * 1103515245u + 12345u;
+    return (int)((wrng_state >> 16) & 0x7FFF);
+}
+
 void model_init(GameModel *m, int scr_w, int scr_h, unsigned seed) {
     m->scr_w = scr_w;
     m->scr_h = scr_h;
@@ -33,6 +43,9 @@ void model_init(GameModel *m, int scr_w, int scr_h, unsigned seed) {
     m->peer_seen = false;
     m->peer_ready = false;
     m->wait_ctr = 0;
+    m->my_seed   = 0;
+    m->peer_seed = 0;
+    world_rand_seed((uint32_t)seed);
     m->shield_timer = 0;
     m->magnet_timer = 0;
     m->powerup_timer = 0;
@@ -193,7 +206,7 @@ void model_update(GameModel *m) {
             for (int i = 0; i < MAX_MISSILES; i++) {
                 if (m->missiles[i].warning == 0 && !m->missiles[i].active) {
                     m->missiles[i].warning = MISSILE_WARN;
-                    m->missiles[i].y = 30 + (rand() % (m->scr_h - FLOOR_H - 60));
+                    m->missiles[i].y = 30 + (world_rand() % (m->scr_h - FLOOR_H - 60));
                     break;
                 }
             }

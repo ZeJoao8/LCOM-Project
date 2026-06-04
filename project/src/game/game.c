@@ -52,6 +52,8 @@ void game_update(void) {
      * start playing on the same frame on both sides. */
     if (M.state == STATE_WAITING && M.peer_seen && M.peer_ready) {
         bool was_versus = M.versus;
+        uint32_t agreed = (uint32_t)M.my_seed ^ (uint32_t)M.peer_seed;
+        world_rand_seed(agreed);    /* sync obstacle RNG on both machines */
         model_reset(&M);
         M.versus = was_versus;
         M.state = STATE_PLAYING;

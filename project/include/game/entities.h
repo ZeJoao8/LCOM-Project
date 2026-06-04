@@ -120,9 +120,11 @@ typedef struct {
     int  net_silence;     /* frames since the last packet from the peer */
 
     /* Handshake state, valid while STATE_WAITING. Owned by start_game. */
-    bool peer_seen;       /* we received a HELLO since entering WAITING */
-    bool peer_ready;      /* we received a READY since entering WAITING */
-    int  wait_ctr;        /* frames spent in WAITING (UI + send cadence) */
+    bool     peer_seen;   /* we received a HELLO since entering WAITING */
+    bool     peer_ready;  /* we received a READY since entering WAITING */
+    int      wait_ctr;    /* frames spent in WAITING (UI + send cadence) */
+    uint16_t my_seed;     /* local RNG seed generated at start_game, sent to peer */
+    uint16_t peer_seed;   /* peer's seed, received via HELLO/READY/STATE */
 
     /* Persistent leaderboard (loaded/saved by the glue layer). */
     ScoreEntry high_scores[MAX_SCORES];

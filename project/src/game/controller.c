@@ -30,6 +30,8 @@ static void start_game(GameModel *m, bool versus) {
     model_reset(m);
     m->versus = versus;     /* set after reset, which clears the round state */
     if (versus) {
+        m->my_seed    = (uint16_t)m->anim;
+        m->peer_seed  = 0;
         m->peer_seen  = false;
         m->peer_ready = false;
         m->wait_ctr   = 0;
@@ -134,8 +136,7 @@ void controller_handle_kbd(GameModel *m, uint8_t scancode) {
             else if (m->control_mode == 2) is_action = (scancode == 0x2C || scancode == 0x2D);
 
             if (is_action || scancode == ENTER_MAKE) {
-                model_reset(m);
-                m->state = STATE_PLAYING;
+                start_game(m, m->versus);
             }
             break;
         }
@@ -210,10 +211,9 @@ void controller_handle_mouse(GameModel *m, int16_t dx, int16_t dy, bool lb_press
         back_btn_rect(m->scr_w, m->scr_h, &x, &y, &w, &h);
         if (pt_in_rect(m->mouse_x, m->mouse_y, x, y, w, h)) {
             m->state = STATE_MENU;
-            m->menu_sel = 3; /* Highlight settings button on return */
+            m->menu_sel = 3;
         } else {
-            model_reset(m);        /* click anywhere else restarts */
-            m->state = STATE_PLAYING;
+            start_game(m, m->versus);   /* versus re-runs handshake; solo goes direct */
         }
     }
 }

@@ -18,6 +18,12 @@ void model_reset(GameModel *m);
 /** Advance the simulation by one timer tick. */
 void model_update(GameModel *m);
 
+/* ── World RNG (obstacle generation only — synced in 2-player mode) ───────── */
+/** Seed the world RNG; called once per match with the agreed seed. */
+void world_rand_seed(uint32_t s);
+/** Draw one value from the world RNG (LCG, independent of rand()). */
+int  world_rand(void);
+
 /* ── Integer geometry shared with the view (read-only helpers) ────────────── */
 
 /** Integer sine, scaled by 1024, ANG_STEPS per full turn. */
