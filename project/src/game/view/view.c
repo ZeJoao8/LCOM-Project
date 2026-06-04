@@ -45,11 +45,9 @@ static void render_menu(void) {
 
     /* Session best score */
     if (M->high_score > 0) {
-        char hb[16];
-        int_to_str(M->high_score, hb, sizeof(hb));
-        int bx = scr_w/2 - 54;
-        draw_text("BEST", bx, scr_h/4 + 92, 2, COL_SCORE);
-        draw_text(hb, bx + 5*6*2, scr_h/4 + 92, 2, COL_SCORE);
+        char hb[32];
+        snprintf(hb, sizeof(hb), "SESSION BEST: %d", M->high_score);
+        draw_text_c(hb, scr_w/2, scr_h/4 + 92, 2, COL_SCORE);
     }
 
     const char *labels[MENU_ITEMS] = {"PLAY", "2-PLAYER", "INSTRUCTIONS", "SETTINGS", "LEADERBOARD", "QUIT"};
@@ -113,8 +111,10 @@ static void render_menu(void) {
     
  
     /* unlocked power icons bottom row */
-    
+    {
         int ix = 24, iy = scr_h - 75;
+        if (M->powers_unlocked)
+            draw_text("POWERS:", ix, iy - 14, 1, COL_STAR);
         if (M->powers_unlocked & POWER_DOUBLE_COINS) {
             draw_text("2xCOIN", ix, iy, 1, COL_COIN);  ix += 7*6 + 4;
         }
@@ -127,8 +127,7 @@ static void render_menu(void) {
         if (M->powers_unlocked & POWER_EXTRA_LIFE) {
             draw_text("XLIFE", ix, iy, 1, COL_GAMEOVER);
         }
-    
-
+    }
 
     draw_cursor();
 }
@@ -349,32 +348,27 @@ static void render_playing(void) {
             draw_text("1UP", scr_w - 120, hud_y, 1, COL_GAMEOVER);
     }
 
-    /* XP mini-bar top-centre */
-    
+    /* XP mini-bar — below coin counter */
+    {
         int xp   = M->xp_total;
         int next = XP_THRESH_4;
         if      (xp < XP_THRESH_1) next = XP_THRESH_1;
         else if (xp < XP_THRESH_2) next = XP_THRESH_2;
         else if (xp < XP_THRESH_3) next = XP_THRESH_3;
-        
+
         int bw = 80, bh = 6;
-        /* Coloca a barra exatamente no centro do ecrã (scr_w / 2) */
-        int bx = scr_w / 2 - bw / 2;
-        int by = 10; /* Alinhada com a altura do texto SCORE */
-        
-        /* Desenha a palavra "XP" ligeiramente à esquerda da barra */
-        draw_text("XP:", bx - 24, by - 1, 1, COL_TITLE);
-        
-        /* Desenha o fundo e o preenchimento da barra */
+        int bx = 10, by = 58;
+
+        draw_text("XP:", bx, by - 10, 1, COL_TITLE);
+
         draw_rect(bx, by, bw, bh, COL_BTN_BG);
         int fill = (xp >= next) ? bw : (xp * bw / next);
         if (fill > 0) draw_rect(bx, by, fill, bh, COL_SHIELD);
-        
-        /* Contorno da barra */
         draw_rect(bx,          by,          bw, 1, COL_OBS_TOP);
         draw_rect(bx,          by + bh - 1, bw, 1, COL_OBS_TOP);
         draw_rect(bx,          by,          1, bh, COL_OBS_TOP);
         draw_rect(bx + bw - 1, by,          1, bh, COL_OBS_TOP);
+    }
 
 
 
