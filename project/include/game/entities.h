@@ -13,6 +13,15 @@
 #include "game/game.h"      /* game_state_t */
 #include "game/config.h"    /* MAX_* sizes  */
 
+
+/* ── Tamanhos de string ───────────────────────────────────────────────────── */
+#define MAX_NAME_LEN    16   /* FEATURE: nome do jogador (15 chars + '\0')    */
+#define SCORE_WHEN_LEN  20   /* "DD/MM/YY HH:MM:SS" + '\0'                   */
+
+
+
+
+
 /** Vertical-only player; horizontal position is fixed at PLAYER_X. */
 typedef struct {
     int  y, vy;
@@ -64,6 +73,7 @@ typedef struct {
 
 /** One leaderboard row: a score and when it was achieved (from the RTC). */
 typedef struct {
+    char name[MAX_NAME_LEN];
     int  score;
     char when[SCORE_WHEN_LEN];   /* "DD/MM/YY HH:MM" */
 } ScoreEntry;
@@ -123,6 +133,30 @@ typedef struct {
     ScoreEntry high_scores[MAX_SCORES];
     int        high_count;    /* number of valid entries in high_scores  */
     int        last_rank;     /* rank (0-based) this run earned, or -1   */
+
+    
+    /* XP e Poderes ──────────────────────────────────────────── */
+    int      xp_total;         /* XP acumulado entre todas as sessões        */
+    uint32_t powers_unlocked;  /* bitmask POWER_* desbloqueados              */
+    bool     extra_life_used;  /* POWER_EXTRA_LIFE já foi consumido nesta run */
+ 
+        /* Login / name input state (STATE_NAME_INPUT) */
+    char input_name[MAX_NAME_LEN];
+    int  input_name_len;
+    char input_password[MAX_PASSWORD_LEN];
+    int  input_password_len;
+    bool typing_password;   /* false = filling name, true = filling password */
+    bool login_error;       /* wrong password flag */
+    bool logged_in;         /* a user is authenticated for this session      */
+
+
+    
+    /* Leaderboard display cache */
+
+    ScoreEntry lb_entries[MAX_SCORES];  /* entradas a apresentar no ecrã     */
+    int        lb_count;                /* quantas entradas em lb_entries     */
+    int        lb_scroll;               /* offset de scroll (STATE_LB_ALL)   */
+
 } GameModel;
 
 #endif /* _GAME_ENTITIES_H_ */
