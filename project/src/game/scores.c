@@ -11,10 +11,9 @@
 #include "game/entities.h"
 
 
-#undef SCORES_PATH
-#undef XP_PATH
-#define SCORES_PATH "jetpack_scores.txt"
-#define XP_PATH     "xp.txt"   
+#ifndef XP_PATH
+#define XP_PATH "/home/lcom/labs/project/data/xp.txt"
+#endif
 
 void scores_load(ScoreEntry *table, int *count, int max) {
     *count = 0;
