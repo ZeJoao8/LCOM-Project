@@ -21,6 +21,11 @@ CFLAGS += -I.            # devices/<dev>/<file>.h headers
 
 # 5. LCF Dependencies
 DPADD += ${LIBLCF}
-LDADD += -llcf 
+LDADD += -llcf
+
+# 6. Doxygen documentation: `make docs` generates HTML in docs/html/
+.PHONY: docs
+docs:
+	doxygen Doxyfile
 
 .include <minix.lcom.mk>

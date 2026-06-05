@@ -11,10 +11,17 @@
 #include "game/entities.h"
 
 
-#ifndef XP_PATH
-#define XP_PATH "/home/lcom/labs/project/data/xp.txt"
-#endif
-
+/**
+ * @brief Load up to @p max leaderboard entries from SCORES_PATH into @p table.
+ *
+ * Accepts both the current "name;score;when" line format and a legacy
+ * "score;when" format (whose entries get a placeholder name). A missing file
+ * yields an empty board.
+ *
+ * @param table Destination array (kept best-first).
+ * @param count Out: number of entries actually read.
+ * @param max   Capacity of @p table.
+ */
 void scores_load(ScoreEntry *table, int *count, int max) {
     *count = 0;
     FILE *f = fopen(SCORES_PATH, "r");
@@ -25,17 +32,17 @@ void scores_load(ScoreEntry *table, int *count, int max) {
                 char *p1 = strchr(line, ';');
         if (p1 == NULL) continue;
         *p1 = '\0';
- 
-        /* Verifica se o primeiro campo é um número (formato antigo). */
+
+        /* Detect the legacy format: a purely numeric first field. */
         bool legacy = true;
         for (char *c = line; *c; c++) {
             if (*c < '0' || *c > '9') { legacy = false; break; }
         }
- 
+
         ScoreEntry *e = &table[*count];
- 
+
         if (legacy) {
-            /* Formato antigo: "score;when" — usa nome genérico */
+            /* Legacy format "score;when": use a placeholder name. */
             strncpy(e->name, "???", MAX_NAME_LEN - 1);
             e->name[MAX_NAME_LEN - 1] = '\0';
             e->score = atoi(line);
@@ -45,7 +52,7 @@ void scores_load(ScoreEntry *table, int *count, int max) {
             strncpy(e->when, when, SCORE_WHEN_LEN - 1);
             e->when[SCORE_WHEN_LEN - 1] = '\0';
         } else {
-            /* Novo formato: "name;score;when" */
+            /* Current format "name;score;when". */
             strncpy(e->name, line, MAX_NAME_LEN - 1);
             e->name[MAX_NAME_LEN - 1] = '\0';
  
@@ -66,6 +73,11 @@ void scores_load(ScoreEntry *table, int *count, int max) {
 
 }
 
+/**
+ * @brief Overwrite SCORES_PATH with the first @p count entries of @p table.
+ * @param table Leaderboard to persist.
+ * @param count Number of entries to write.
+ */
 void scores_save(const ScoreEntry *table, int count) {
     FILE *f = fopen(SCORES_PATH, "w");
     if (f == NULL) return;                 /* read-only FS: fail quietly */
@@ -74,6 +86,17 @@ void scores_save(const ScoreEntry *table, int count) {
     fclose(f);
 }
 
+/**
+ * @brief Insert a new run into the leaderboard, keeping it sorted best-first and
+ *        capped at @p max entries.
+ * @param table Leaderboard to modify.
+ * @param count In/out: current entry count (updated on success).
+ * @param max   Maximum entries to keep.
+ * @param name  Player name.
+ * @param score Score achieved.
+ * @param when  RTC timestamp string.
+ * @return The 0-based rank the run landed on, or -1 if it did not qualify.
+ */
 int scores_insert(ScoreEntry *table, int *count, int max,
                   const char *name, int score, const char *when) {
     /* Find the first slot whose score we beat (sorted best-first). */
@@ -83,11 +106,11 @@ int scores_insert(ScoreEntry *table, int *count, int max,
     }
     if (pos >= max) {
         if (*count < max) {
-            pos = *count; /* Adiciona ao fim se ainda houver espaço */
+            pos = *count; /* append if there is still room */
         } else {
-            return -1; /* Tabela totalmente cheia na memória */
+            return -1; /* table already full in memory */
         }
-    }         
+    }
 
     int newcount = (*count < max) ? *count + 1 : max;
     for (int i = newcount - 1; i > pos; i--)
@@ -103,29 +126,15 @@ int scores_insert(ScoreEntry *table, int *count, int max,
     return pos;
 }
 
+/** @brief Copy the best @p n entries of @p table into @p out, setting @p out_count. */
 void scores_get_top(const ScoreEntry *table, int count, int n, ScoreEntry *out, int *out_count) {
     *out_count = (count < n) ? count : n;
-    for (int i = 0; i < *out_count; i++) out[i] = table[i];   
+    for (int i = 0; i < *out_count; i++) out[i] = table[i];
 }
 
+/** @brief Copy all @p count entries of @p table into @p out, setting @p out_count. */
 void scores_get_all(const ScoreEntry *table, int count, ScoreEntry *out, int *out_count) {
     *out_count = count;
     for (int i = 0; i < count; i++) out[i] = table[i];
-}
-
-int scores_load_xp(void) {
-    FILE *f = fopen(XP_PATH, "r");
-    if (f == NULL) return 0;
-    int xp = 0;
-    if (fscanf(f, "%d", &xp) != 1) xp = 0;
-    fclose(f);
-    return xp;
-}
- 
-void scores_save_xp(int xp) {
-    FILE *f = fopen(XP_PATH, "w");
-    if (f == NULL) return;
-    fprintf(f, "%d\n", xp);
-    fclose(f);
 }
 

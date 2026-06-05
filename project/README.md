@@ -2,7 +2,9 @@
 
 A *Jetpack Joyride*-style arcade game for **MINIX**, built on the LCOM framework.
 Fly your jetpack as far as possible, dodge electric **zappers** and **missiles**, and
-grab coins. Includes a live real-time clock and a **2-player race over the serial port**.
+grab coins. Includes timed **power-ups**, a persistent **XP / unlockable-powers**
+progression with **user accounts**, a live real-time clock, and a **2-player race
+over the serial port**.
 
 ## I/O devices used
 
@@ -25,15 +27,22 @@ All six devices studied in the course are exercised:
 | Mouse move + click | navigate and select menu buttons |
 | `↑` / `↓` + `ENTER` | navigate and select with the keyboard |
 | `P` | pause / resume (solo) |
-| `ESC` | quit the program |
+| `ESC` | back to menu, or quit from the menu |
+
+The thrust keys can be remapped in **Settings** to one of three control schemes
+(`W`/`SPACE`, `↑`/`ENTER`, or `Z`/`X`). Settings also expose difficulty, starting
+speed and visual effects, and are persisted to disk.
 
 ## Architecture (MVC)
 
 ```
 include/devices/   kbc, mouse, timer, video_gr, rtc, serial, utils, i8042, i8254
-include/game/      config, entities, model, view, controller, net, game
+include/game/      config, entities, model, view, controller, net, scores,
+                   settings, game (+ model_internal, view_internal)
 src/devices/       device drivers
-src/game/          main, game (glue), model, view, controller, net
+src/game/          main, game (glue), controller, net, scores, settings
+src/game/model/    model, model_geometry, model_effects, model_spawn
+src/game/view/     view, view_draw, view_world, view_background, view_sprites, view_ui
 ```
 
 - **Model** (`model.c`, `entities.h`) — pure simulation: physics, spawning,
@@ -62,22 +71,32 @@ lcom_run proj          # or: service run `pwd`/proj
 
 Two MINIX machines connected by a **null-modem cable on COM1** (or two VMs with
 their first serial ports cross-connected). On each machine pick **2-PLAYER** from
-the menu. Each player flies their own course; the link exchanges position and
-score so you see the opponent as a cyan **ghost** and a `P2` score in the HUD.
-When both players crash, the game-over screen shows the winner (highest score).
+the menu. Both sides exchange a short **HELLO / READY handshake** in the lobby
+(`WAITING`) — which also agrees a shared RNG seed so the obstacle course matches —
+and then start on the same frame. Each player flies their own course; the link
+exchanges position and score so you see the opponent as a blue **ghost** (`P2`)
+and a `P2` score in the HUD. When both players crash, the game-over screen shows
+the winner (highest score).
 
-The link is **non-blocking**: if no peer is connected, 2-player mode still runs
-as a normal solo game (the ghost simply never appears).
+The link is **non-blocking**: if a peer goes silent it is dropped after a timeout
+(`NET_PEER_TIMEOUT`), so a pulled cable can't hang the round.
 
 ### Protocol
 
-A tiny framed protocol at 115200 baud, 8N1:
+A small framed protocol at 115200 baud, 8N1, with per-frame **CRC-8** (poly 0x07):
 
 ```
-SYNC(0xA5) TYPE B0 B1 B2 B3 CHK     CHK = TYPE ^ B0 ^ B1 ^ B2 ^ B3
-  TYPE_STATE (1): B0:B1 = player Y, B2:B3 = score   (sent ~20x/s while playing)
-  TYPE_DEAD  (2): B0:B1 = final score               (sent once on death)
+SYNC0(0xA5) SYNC1(0x5A) TYPE LEN B0..B(LEN-1) CRC8
+  CRC8 covers TYPE, LEN and the LEN payload bytes.
+  STATE (1): payload y(2) score(2) seed(2)   (sent every 3 frames while playing)
+  DEAD  (2): payload score(2)                (sent once on death)
+  HELLO (3): payload seed(2)                 (lobby handshake beacon)
+  READY (4): payload seed(2)                 (sent after the peer's HELLO is seen)
+  BYE   (5): no payload                      (one-shot: cancels a waiting/playing peer)
 ```
+
+The receiver uses a sliding-window parser that re-syncs byte by byte, so a
+payload byte that happens to equal a sync byte can't lock it onto a false frame.
 
 ## Power-ups
 
@@ -87,19 +106,44 @@ Two timed pickups float in from the right (5 s each):
   any missile that hits you. A pulsing cyan ring shows it is active.
 - **M — Magnet**: nearby coins are pulled toward the player.
 
+## XP, powers and accounts
+
+Coins, dodged missiles, power-ups and distance all earn **XP**, which is saved
+per user. Reaching XP thresholds unlocks permanent **powers** that then apply to
+every run:
+
+- **2× Coins**, **Shield at start**, **Slower missiles**, **Extra life**.
+
+On launch you log in with a **name + password** (new names are registered
+automatically); your XP — and therefore your unlocked powers — is restored from
+disk. Thresholds, rewards and power bit-flags all live in `include/game/config.h`.
+
 ## Persistent leaderboard
 
-The best runs are saved to disk with their **RTC date/time** and shown on the
-menu and on the game-over screen (with the rank earned). The file path is
-`SCORES_PATH` in `include/game/config.h` (default `/home/lcom/jetpack_scores.txt`)
-— change it to a writable location on your VM if needed.
+The best runs are saved to disk with the player **name** and their **RTC
+date/time**, and shown on the menu and on the game-over screen (with the rank
+earned). Paths are defined in `include/game/config.h`
+(`SCORES_PATH`, `SETTINGS_PATH`, `USERS_PATH`), under `data/` by default —
+point them at a writable location on your VM if needed.
+
+## Documentation
+
+The source is documented with **Doxygen**. To generate the browsable HTML docs:
+
+```sh
+doxygen Doxyfile        # or, on MINIX: make docs
+```
+
+Open `docs/html/index.html` in a browser. Configuration lives in `Doxyfile`;
+the generated `docs/` folder is git-ignored.
 
 ## Notes
 
-- The RNG is seeded from the RTC, so the obstacle course differs each launch.
+- The RNG is seeded from the RTC, so the obstacle course differs each launch
+  (in 2-player mode both machines agree a shared seed during the handshake).
 - The background (sky gradient + scrolling city skylines) is drawn procedurally,
   not from image assets.
 - The serial driver counts line-status errors and RX-ring overflows, and the
   2-player link drops a silent peer after a timeout so a pulled cable can't hang
   the round.
-- `core.*`, `proj` and object files are git-ignored.
+- `proj`, object files (`*.o`) and the generated `docs/` are git-ignored.

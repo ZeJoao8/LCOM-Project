@@ -28,8 +28,11 @@
 #define P_MAKE      0x19
 #define BACK_MAKE   0x0E
 
-/* Scancode -> ASCII (uppercase) for name input.
- * Returns '\0' if the key has no printable mapping we want. */
+/**
+ * @brief Map a make scancode to an uppercase ASCII character for name input.
+ * @param sc Scancode (make code).
+ * @return The mapped character, or '\0' if the key has no printable mapping.
+ */
 static char scancode_to_char(uint8_t sc) {
     /* Row 1: numbers */
     static const char row1[] = "1234567890";
@@ -50,9 +53,15 @@ static char scancode_to_char(uint8_t sc) {
 
 
 
-/* Start a fresh run, solo or serial 2-player. Solo jumps straight into play;
- * 2-player enters a lobby/waiting state and only transitions to PLAYING once
- * both peers have exchanged HELLO + READY. */
+/**
+ * @brief Start a fresh run, solo or serial 2-player.
+ *
+ * Solo jumps straight into play; 2-player enters the WAITING lobby and only
+ * transitions to PLAYING once both peers have exchanged HELLO + READY.
+ *
+ * @param m      Game model.
+ * @param versus true for a 2-player serial race, false for solo.
+ */
 static void start_game(GameModel *m, bool versus) {
     model_reset(m);
     m->versus = versus;     /* set after reset, which clears the round state */
@@ -71,11 +80,14 @@ static void start_game(GameModel *m, bool versus) {
 }
 
 
-/* Load all scores e vai para o all-scores view atualizado do disco */
+/**
+ * @brief Reload the leaderboard from disk and open the all-scores view.
+ * @param m Game model.
+ */
 static void open_leaderboard_all(GameModel *m) {
-    /* Força a leitura do ficheiro real guardado antes de mostrar no ecrã */
+    /* Reload the on-disk file before showing it. */
     scores_load(m->high_scores, &m->high_count, MAX_SCORES);
-    
+
     scores_get_all(m->high_scores, m->high_count,
                    m->lb_entries, &m->lb_count);
     m->lb_scroll = 0;
@@ -83,7 +95,12 @@ static void open_leaderboard_all(GameModel *m) {
 }
 
 
-/* Run the action behind a top-level menu entry. */
+/**
+ * @brief Apply the action of settings entry @p idx (toggle/cycle an option or
+ *        go back), saving to disk when an option changed.
+ * @param m   Game model.
+ * @param idx Settings entry index.
+ */
 static void settings_activate(GameModel *m, int idx) {
     switch (idx) {
         case 0: m->difficulty = (m->difficulty + 1) % 3;             break;
@@ -98,6 +115,12 @@ static void settings_activate(GameModel *m, int idx) {
     }
 }
 
+/**
+ * @brief Apply the action of main-menu entry @p idx (play, 2-player,
+ *        instructions, settings, leaderboard, or exit).
+ * @param m   Game model.
+ * @param idx Menu entry index (0..MENU_ITEMS-1).
+ */
 static void menu_activate(GameModel *m, int idx) {
     switch (idx) {
         case 0: start_game(m, false);            break;  /* PLAY (solo)      */
@@ -110,6 +133,13 @@ static void menu_activate(GameModel *m, int idx) {
     }
 }
 
+/**
+ * @brief Handle one keyboard scancode according to the current game state:
+ *        menu navigation, thrust during play, pause, name/password entry, and
+ *        leaderboard scrolling. ESC backs out to the menu (or exits from it).
+ * @param m        Game model.
+ * @param scancode Make or break code from the keyboard handler.
+ */
 void controller_handle_kbd(GameModel *m, uint8_t scancode) {
     /* ESC returns to main menu from any screen; if already on menu, it exits the game. */
     if (scancode == ESC_MAKE) {
@@ -251,6 +281,14 @@ void controller_handle_kbd(GameModel *m, uint8_t scancode) {
     }
 }
 
+/**
+ * @brief Handle one mouse packet: move the clamped cursor, use the left button
+ *        as thrust while playing, sync menu hover with the pointer, and trigger
+ *        button actions on the click edge.
+ * @param m          Game model.
+ * @param dx,dy      Relative motion (dy positive is up, so cursor Y is inverted).
+ * @param lb_pressed Current left-button state.
+ */
 void controller_handle_mouse(GameModel *m, int16_t dx, int16_t dy, bool lb_pressed) {
     /* Update cursor, clamped to the screen. Y is inverted (up = negative dy). */
     m->mouse_x += dx;
@@ -325,6 +363,25 @@ void controller_handle_mouse(GameModel *m, int16_t dx, int16_t dy, bool lb_press
             m->menu_sel = 3;
         } else {
             start_game(m, m->versus);
+        }
+    }
+    else if (m->state == STATE_NAME_INPUT) {
+        int x, y, w, h;
+        /* Click the USER field to go back and edit the username. */
+        login_field_rect(m->scr_w, m->scr_h, 0, &x, &y, &w, &h);
+        if (pt_in_rect(m->mouse_x, m->mouse_y, x, y, w, h)) {
+            m->typing_password = false;
+            m->login_error = false;
+            return;
+        }
+        /* Click the PASS field to move on to the password (needs a username). */
+        login_field_rect(m->scr_w, m->scr_h, 1, &x, &y, &w, &h);
+        if (pt_in_rect(m->mouse_x, m->mouse_y, x, y, w, h)) {
+            if (m->input_name_len > 0) {
+                m->typing_password = true;
+                m->login_error = false;
+            }
+            return;
         }
     }
 }

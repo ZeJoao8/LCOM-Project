@@ -194,25 +194,40 @@ static inline bool pt_in_rect(int px, int py, int x, int y, int w, int h) {
     return px >= x && px <= x + w && py >= y && py <= y + h;
 }
 
-/* ── CONFIGURAÇÃO: Limites de XP para desbloquear os Poderes ── */
+/* ── Login box geometry (STATE_NAME_INPUT) ────────────────────────────────── */
+#define LOGIN_BOX_W 260
+#define LOGIN_BOX_H 140
+
+/** Clickable rectangle of login field @p idx (0 = username, 1 = password). */
+static inline void login_field_rect(int scr_w, int scr_h, int idx,
+                                    int *x, int *y, int *w, int *h) {
+    int box_x = scr_w / 2 - LOGIN_BOX_W / 2;
+    int box_y = scr_h / 2 - LOGIN_BOX_H / 2;
+    *x = box_x + 14;
+    *y = box_y + 54 + idx * 25;     /* rows are drawn at box_y + 60 and + 85 */
+    *w = LOGIN_BOX_W - 28;
+    *h = 18;
+}
+
+/* ── XP thresholds that unlock each power ─────────────────────────────────── */
 #define XP_THRESH_1   500
 #define XP_THRESH_2  1500
 #define XP_THRESH_3  3000
 #define XP_THRESH_4  6000
 
-/* ── CONFIGURAÇÃO: Recompensas de XP por eventos de jogo ── */
+/* ── XP rewards per in-game event ─────────────────────────────────────────── */
 #define XP_PER_COIN        5
-#define XP_PER_METER      10   /* por cada X frames de distância */
+#define XP_PER_METER      10   /* per X frames of distance travelled */
 #define XP_PER_POWERUP    20
-#define XP_PER_MISSILE    15   /* míssil esquivado */
+#define XP_PER_MISSILE    15   /* missile dodged */
 
-/* ── CONFIGURAÇÃO: Bitmask dos Poderes (Flags de Bits) ── */
-#define POWER_DOUBLE_COINS   (1 << 0)  /* Bit 0: 2x moedas */
-#define POWER_SHIELD_START   (1 << 1)  /* Bit 1: escudo no início */
-#define POWER_SLOW_MISSILES  (1 << 2)  /* Bit 2: mísseis mais lentos */
-#define POWER_EXTRA_LIFE     (1 << 3)  /* Bit 3: vida extra */
+/* ── Power bitmask flags ──────────────────────────────────────────────────── */
+#define POWER_DOUBLE_COINS   (1 << 0)  /* Bit 0: 2x coins */
+#define POWER_SHIELD_START   (1 << 1)  /* Bit 1: shield at the start */
+#define POWER_SLOW_MISSILES  (1 << 2)  /* Bit 2: slower missiles */
+#define POWER_EXTRA_LIFE     (1 << 3)  /* Bit 3: extra life */
 
 
-#define MAX_PASSWORD_LEN 32
+#define MAX_PASSWORD_LEN 32            /* max length of a stored user password */
 
 #endif /* _GAME_CONFIG_H_ */

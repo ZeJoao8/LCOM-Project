@@ -5,13 +5,20 @@
  */
 #include "game/view_internal.h"
 
-/* Small mouse crosshair. */
+/** @brief Draw the small mouse crosshair at the model's pointer position. */
 void draw_cursor(void) {
     draw_rect(M->mouse_x - 5, M->mouse_y,     11, 2, COL_SCORE);
     draw_rect(M->mouse_x,     M->mouse_y - 5, 2, 11, COL_SCORE);
 }
 
-/* Outlined button with centred label. */
+/**
+ * @brief Draw an outlined button with a centred label.
+ * @param x,y       Top-left corner.
+ * @param w,h       Button size.
+ * @param label     Text to centre inside the button.
+ * @param tscale    Text scale.
+ * @param highlight true to draw the selected/hovered style.
+ */
 void draw_button(int x, int y, int w, int h, const char *label,
                  int tscale, bool highlight) {
     uint32_t bg  = highlight ? COL_TITLE  : COL_BTN_BG;

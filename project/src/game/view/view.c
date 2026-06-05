@@ -19,6 +19,7 @@ int g_scroll_x = 0;   /* world scroll accumulator; advanced only while PLAYING *
 
 /* ── Per-state screens ────────────────────────────────────────────────────── */
 
+/** @brief Render the main menu: stars, animated player preview, title, buttons, RTC clock, best runs, XP bar and unlocked powers. */
 static void render_menu(void) {
     clear_buffer(COL_MENU_BG);
 
@@ -132,7 +133,7 @@ static void render_menu(void) {
     draw_cursor();
 }
 
-/* Lobby for 2-player: stay here until both peers exchange HELLO + READY. */
+/** @brief Render the 2-player lobby shown until both peers exchange HELLO + READY. */
 static void render_waiting(void) {
     clear_buffer(COL_MENU_BG);
 
@@ -167,6 +168,7 @@ static void render_waiting(void) {
     draw_cursor();
 }
 
+/** @brief Render the instructions screen (controls and goal) with a BACK button. */
 static void render_instructions(void) {
     clear_buffer(COL_MENU_BG);
 
@@ -195,6 +197,7 @@ static void render_instructions(void) {
     draw_cursor();
 }
 
+/** @brief Render the settings screen with the current difficulty, control, speed and effects options. */
 static void render_settings(void) {
     clear_buffer(COL_MENU_BG);
 
@@ -225,6 +228,7 @@ static void render_settings(void) {
     draw_cursor();
 }
 
+/** @brief Render active gameplay: background, obstacles, coins, power-ups, missiles, the player and the HUD (score, coins, speed, powers, XP, P2). */
 static void render_playing(void) {
     draw_parallax();                 /* sky gradient + scrolling skylines */
     draw_floor();                    /* scrolling ground for a sense of speed  */
@@ -383,6 +387,7 @@ static void render_playing(void) {
     }
 }
 
+/** @brief Render the game-over screen: score/rank (solo) or the 2-player result, the run timestamp and a BACK button. */
 static void render_gameover(void) {
     clear_buffer(M->hit_flash > 0 ? 0x661111 : COL_MENU_BG);   /* red flash */
 
@@ -446,30 +451,45 @@ static void render_gameover(void) {
     draw_cursor();
 }
 
-/* -------------------------------------------------------------------
- * render_name_input
- * ------------------------------------------------------------------- */
+/**
+ * @brief Render the account-login screen (STATE_NAME_INPUT): clickable username
+ *        and masked-password fields (the active one highlighted) with a blinking
+ *        caret, the mouse cursor, and error/instruction feedback.
+ */
 static void render_name_input(void) {
     clear_buffer(COL_MENU_BG);
 
-    int box_w = 260, box_h = 140;
+    int box_w = LOGIN_BOX_W, box_h = LOGIN_BOX_H;
     int box_x = scr_w/2 - box_w/2;
     int box_y = scr_h/2 - box_h/2;
-    
-    /* Usamos COL_MENU_BG para a caixa para garantir que compila sem erros */
+
+    /* Login box background. */
     draw_rect(box_x, box_y, box_w, box_h, COL_MENU_BG);
 
     draw_text_c("ACCOUNT LOGIN", scr_w/2, box_y + 15, 2, COL_TITLE);
-   
-    
-    /* Campo do Username */
+
+    /* Clickable field boxes: outline both, highlight the active one so it is
+       clear the username can be re-selected with the mouse. */
+    for (int i = 0; i < 2; i++) {
+        int fx, fy, fw, fh;
+        login_field_rect(scr_w, scr_h, i, &fx, &fy, &fw, &fh);
+        bool active = (i == 0) ? !M->typing_password : M->typing_password;
+        bool hover  = pt_in_rect(M->mouse_x, M->mouse_y, fx, fy, fw, fh);
+        uint32_t edge = active ? COL_SCORE : (hover ? COL_BTN_HI : COL_OBS_TOP);
+        draw_rect(fx,          fy,          fw, 1,  edge);
+        draw_rect(fx,          fy + fh - 1, fw, 1,  edge);
+        draw_rect(fx,          fy,          1,  fh, edge);
+        draw_rect(fx + fw - 1, fy,          1,  fh, edge);
+    }
+
+    /* Username field. */
     draw_text("USER:", box_x + 20, box_y + 60, 1, COL_TITLE);
     draw_text(M->input_name, box_x + 80, box_y + 60, 1, COL_TEXT);
     if (!M->typing_password && (M->anim / 20) % 2 == 0) {
         draw_rect(box_x + 80 + M->input_name_len * 6, box_y + 60, 2, 8, COL_SCORE);
     }
 
-    /* Campo da Password (com Máscara) */
+    /* Password field (masked). */
     draw_text("PASS:", box_x + 20, box_y + 85, 1, COL_TITLE);
     char masked_pass[16];
     int p_len = M->input_password_len;
@@ -480,20 +500,23 @@ static void render_name_input(void) {
         draw_rect(box_x + 80 + p_len * 6, box_y + 85, 2, 8, COL_SCORE);
     }
 
-    /* Feedback de Erro ou Instrução */
+    /* Error feedback or next-step instruction. */
     if (M->login_error) {
         draw_text_c("WRONG PASSWORD!", scr_w/2, box_y + 115, 1, COL_TITLE);
     } else {
         if (!M->typing_password)
             draw_text_c("PRESS ENTER FOR PASSWORD", scr_w/2, box_y + 115, 1, COL_TEXT);
         else
-            draw_text_c("PRESS ENTER TO LOGIN", scr_w/2, box_y + 115, 1, COL_TEXT);
+            draw_text_c("ENTER TO LOGIN  -  CLICK USER TO EDIT", scr_w/2, box_y + 115, 1, COL_TEXT);
     }
+
+    draw_cursor();
 }
-/* -------------------------------------------------------------------
- * render_leaderboard
- * Shared renderer for STATE_LEADERBOARD_TOP and STATE_LEADERBOARD_ALL.
- * ------------------------------------------------------------------- */
+/**
+ * @brief Render the leaderboard table (shared by STATE_LEADERBOARD_TOP and
+ *        STATE_LEADERBOARD_ALL): rank/name/score/date rows with scrolling and a
+ *        BACK button.
+ */
 static void render_leaderboard(void) {
     int i;
     int x, y, w, h;
@@ -547,7 +570,7 @@ static void render_leaderboard(void) {
 }
 
 
-/* Frozen play-field with a dimmed "PAUSED" overlay. */
+/** @brief Render the frozen play-field with a dimmed "PAUSED" overlay. */
 static void render_pause(void) {
     render_playing();
     for (int y = 0; y < scr_h; y += 2)          /* venetian dim over the scene */
@@ -556,6 +579,15 @@ static void render_pause(void) {
     draw_text_c("PRESS P TO RESUME", scr_w/2, scr_h/2 + 24, 1, COL_TEXT);
 }
 
+/**
+ * @brief Render and present one frame for model @p m.
+ *
+ * Sets the frame context, advances the ground scroll while playing, dispatches
+ * to the per-state renderer, applies the fade-in on a state change, and swaps
+ * the back buffer to VRAM. Never mutates @p m.
+ *
+ * @param m Game model to render (read-only).
+ */
 void view_render(const GameModel *m) {
     static game_state_t prev = STATE_MENU;
     static int fade = 0;

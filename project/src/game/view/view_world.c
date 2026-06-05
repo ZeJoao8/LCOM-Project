@@ -7,8 +7,11 @@
 #include "game/view_internal.h"
 #include "game/model.h"           /* isin / icos / zap_endpoints */
 
-/* Scrolling ground: solid base, bright lip, plus seams and hazard dashes that
- * slide left at the world speed (g_scroll_x) to sell a sense of motion. */
+/**
+ * @brief Draw the scrolling ground: a solid base, a bright top lip, and seams
+ *        plus hazard dashes that slide left at the world speed (::g_scroll_x) to
+ *        convey motion.
+ */
 void draw_floor(void) {
     int top = scr_h - FLOOR_H;
     draw_rect(0, top, scr_w, FLOOR_H, COL_FLOOR);
@@ -21,7 +24,7 @@ void draw_floor(void) {
     }
 }
 
-/* Draw all live particles and score popups. */
+/** @brief Draw all live particles and "+10" score popups (skipped if effects are off). */
 void draw_particles(void) {
     if (!M->visual_effects) return;
     for (int i = 0; i < MAX_PARTS; i++)
@@ -32,13 +35,13 @@ void draw_particles(void) {
             draw_text("+10", M->popups[i].x, M->popups[i].y, 1, COL_SCORE);
 }
 
-/* Pick the current coin animation frame from the free-running clock. */
+/** @brief Current coin spin-animation frame from the free-running clock. @return frame index 0..COIN_FRAMES-1. */
 int coin_frame(void) {
     static const int seq[6] = { 0, 1, 2, 3, 2, 1 };
     return seq[(M->anim / 8) % 6];
 }
 
-/* Glowing orb at a zapper tip. */
+/** @brief Draw a glowing orb (shell + glow + centre dot) at a zapper tip (cx,cy). */
 static void draw_orb(int cx, int cy) {
     for (int dy = -ORB_R; dy <= ORB_R; dy++) {
         int hw = isqrt_i(ORB_R * ORB_R - dy * dy);
@@ -52,7 +55,11 @@ static void draw_orb(int cx, int cy) {
     draw_rect(cx - 2, cy - 2, 4, 4, COL_TEXT);                   /* centre dot */
 }
 
-/* Draw a zapper as an animated electric beam between two glowing orbs. */
+/**
+ * @brief Draw a zapper as an animated, wobbling electric beam between two
+ *        glowing end orbs.
+ * @param z Zapper to draw.
+ */
 void draw_beam(const Zapper *z) {
     int ax, ay, bx, by;
     zap_endpoints(z, &ax, &ay, &bx, &by);
@@ -78,7 +85,7 @@ void draw_beam(const Zapper *z) {
     draw_orb(bx, by);
 }
 
-/* Layered jetpack flame, anchored at the player's back. */
+/** @brief Draw the layered jetpack flame (yellow core, orange, red tip) at (x,y). */
 void draw_flame(int x, int y) {
     int f = 8 + (M->anim % 8);
     draw_rect(x,      y,           10, f,     COL_SCORE);     /* yellow core */
@@ -86,8 +93,11 @@ void draw_flame(int x, int y) {
     draw_rect(x + 3,  y + f + f/2,  4, 3,     COL_GAMEOVER);  /* red tip */
 }
 
-/* A floating power-up: a shield or magnet sprite, gently bobbing. Falls back to
- * a glowing diamond tagged S/M if the sprites failed to load. */
+/**
+ * @brief Draw a floating power-up: the shield or magnet sprite, gently bobbing.
+ *        Falls back to a glowing diamond tagged S/M if the sprite is missing.
+ * @param pu Power-up to draw.
+ */
 void draw_powerup(const PowerUp *pu) {
     int bob = (isin(M->anim * 2) * 3) / 1024;
     uint8_t    *pix = (pu->type == PU_SHIELD) ? shield_pix : magnet_pix;
@@ -108,7 +118,10 @@ void draw_powerup(const PowerUp *pu) {
     draw_char((pu->type == PU_SHIELD) ? 'S' : 'M', cx - 2, cy - 3, 1, COL_SHADOW);
 }
 
-/* Pulsing ring drawn around the player while the shield is active. */
+/**
+ * @brief Draw the pulsing ring around the player while the shield is active.
+ * @param px,py Player top-left position.
+ */
 void draw_shield_aura(int px, int py) {
     int cx = px + PLAYER_W / 2, cy = py + PLAYER_H / 2;
     int r  = PLAYER_H / 2 + 6 + (isin(M->anim * 3) * 3) / 1024;
@@ -119,10 +132,15 @@ void draw_shield_aura(int px, int py) {
     }
 }
 
-/* 2-player opponent: same silhouette as the local player but recoloured blue
- * via a dedicated XPM (player_p2.xpm). Falls back to the red sprite if the P2
- * XPM failed to load, and to a solid blue rectangle if no sprites loaded at
- * all. A blue "P2" label floats above so the two characters are unambiguous. */
+/**
+ * @brief Draw the 2-player opponent at vertical position @p y.
+ *
+ * Uses the blue P2 sprite when available, falling back to the red player sprite
+ * and then to a solid blue rectangle. A blue "P2" label floats above so the two
+ * characters are unambiguous.
+ *
+ * @param y Opponent's vertical position.
+ */
 void draw_ghost(int y) {
     if (player_p2_pix)
         draw_sprite(player_p2_pix, player_p2_img, PLAYER_X, y, PLAYER_SCALE);

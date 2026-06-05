@@ -6,6 +6,11 @@
 #include <stdio.h>
 #include "game/settings.h"
 
+/**
+ * @brief Load settings from SETTINGS_PATH into @p m, validating ranges. If the
+ *        file is missing the model keeps the defaults set by model_init.
+ * @param m Model whose settings fields are filled.
+ */
 void settings_load(GameModel *m) {
     FILE *f = fopen(SETTINGS_PATH, "r");
     if (f == NULL) return; /* File doesn't exist: keep defaults initialized by model_init */
@@ -19,6 +24,11 @@ void settings_load(GameModel *m) {
     fclose(f);
 }
 
+/**
+ * @brief Persist the model's settings (difficulty, control mode, visual effects,
+ *        initial speed) to SETTINGS_PATH. Fails quietly if the file cannot be opened.
+ * @param m Model whose settings are written.
+ */
 void settings_save(const GameModel *m) {
     FILE *f = fopen(SETTINGS_PATH, "w");
     if (f == NULL) return;

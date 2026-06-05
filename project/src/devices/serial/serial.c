@@ -68,25 +68,31 @@ static volatile int tx_dropped_frames = 0;   /* frames rejected by the caller fo
 static int serial_hook_id = SER_HOOK_ID;
 
 /* ── Ring helpers ─────────────────────────────────────────────────────────── */
+/** @brief True if the RX ring buffer is empty. */
 static bool rx_empty(void) { return rx_head == rx_tail; }
+/** @brief True if the TX ring buffer is empty. */
 static bool tx_empty(void) { return tx_head == tx_tail; }
 
+/** @brief Push one byte into the RX ring; increments ::rx_dropped if it is full. */
 static void rx_push(uint8_t b) {
     int n = (rx_head + 1) % RING;
     if (n != rx_tail) { rx_buf[rx_head] = b; rx_head = n; }
     else rx_dropped++;                                         /* ring full: count the loss */
 }
+/** @brief Pop one byte from the RX ring. @return the byte, or -1 if empty. */
 static int rx_pop(void) {
     if (rx_empty()) return -1;
     uint8_t b = rx_buf[rx_tail];
     rx_tail = (rx_tail + 1) % RING;
     return b;
 }
+/** @brief Push one byte into the TX ring. @return true on success, false if full. */
 static bool tx_push(uint8_t b) {
     int n = (tx_head + 1) % RING;
     if (n == tx_tail) return false;                           /* full */
     tx_buf[tx_head] = b; tx_head = n; return true;
 }
+/** @brief Pop one byte from the TX ring. @return the byte, or -1 if empty. */
 static int tx_pop(void) {
     if (tx_empty()) return -1;
     uint8_t b = tx_buf[tx_tail];
@@ -94,18 +100,20 @@ static int tx_pop(void) {
     return b;
 }
 
-/* Read a UART register; returns 0xFF on failure. */
+/** @brief Read a UART register at offset @p off. @return the byte, or 0xFF on failure. */
 static uint8_t ser_in(int off) {
     uint32_t v;
     if (sys_inb(COM1_BASE + off, &v) != OK) return 0xFF;
     return (uint8_t) v;
 }
+/** @brief Write @p v to the UART register at offset @p off. */
 static void ser_out(int off, uint8_t v) {
     sys_outb(COM1_BASE + off, v);
 }
 
 /* ── Public API ───────────────────────────────────────────────────────────── */
 
+/** @brief Subscribe IRQ 4 (reenable + exclusive); returns @p bit_no. @return 0 on success, 1 on failure. */
 int serial_subscribe_int(uint8_t *bit_no) {
     if (bit_no == NULL) return 1;
     *bit_no = serial_hook_id;
@@ -114,12 +122,19 @@ int serial_subscribe_int(uint8_t *bit_no) {
     return 0;
 }
 
+/** @brief Disable all UART interrupts and remove the IRQ policy. @return 0 on success, 1 on failure. */
 int serial_unsubscribe_int(void) {
     ser_out(SER_IER, 0x00);          /* disable all UART interrupts */
     if (sys_irqrmpolicy(&serial_hook_id) != OK) return 1;
     return 0;
 }
 
+/**
+ * @brief Configure COM1 for the 2-player link: 115200 baud, 8N1, FIFOs enabled,
+ *        interrupts routed to the IRQ line, with RDA and line-status interrupts
+ *        enabled. Also resets the ring buffers and diagnostic counters.
+ * @return 0 on success.
+ */
 int serial_config(void) {
     /* Set divisor for the baud rate (requires DLAB=1). */
     ser_out(SER_LCR, LCR_DLAB | LCR_8N1);
@@ -141,6 +156,12 @@ int serial_config(void) {
     return 0;
 }
 
+/**
+ * @brief Serial interrupt handler. Services every pending UART interrupt in a
+ *        loop: drains received bytes into the RX ring (counting corrupt bytes
+ *        and line-status errors), refills the transmitter from the TX ring, and
+ *        disables the THRE interrupt once the TX ring is empty.
+ */
 void serial_ih(void) {
     uint8_t iir;
     while (!((iir = ser_in(SER_IIR)) & IIR_NO_INT)) {   /* while an interrupt is pending */
@@ -169,32 +190,41 @@ void serial_ih(void) {
     }
 }
 
+/** @brief Queue @p byte for transmission and (re)enable the THRE interrupt. @return 0 on success, 1 if the TX ring is full. */
 int serial_putc(uint8_t byte) {
     if (!tx_push(byte)) return 1;
     ser_out(SER_IER, IER_RDA | IER_LS | IER_THRE);   /* tell me when THR empties */
     return 0;
 }
 
+/** @brief Pop one received byte. @return the byte, or -1 if none available. */
 int serial_getc(void) {
     return rx_pop();
 }
 
+/** @brief True if at least one received byte is waiting in the RX ring. */
 bool serial_available(void) {
     return !rx_empty();
 }
 
+/** @brief Number of received bytes dropped because the RX ring was full. */
 int serial_rx_dropped(void) { return rx_dropped; }
+/** @brief Number of UART line-status errors (overrun/parity/framing/break) seen. */
 int serial_line_errors(void) { return line_errors; }
 
+/** @brief Free slots in the TX ring (one slot reserved to tell full from empty). @return number of bytes that can be queued. */
 int serial_tx_free(void) {
     int h = tx_head, t = tx_tail;
     int used = (h - t + RING) % RING;
     return RING - 1 - used;            /* one slot is reserved to distinguish full from empty */
 }
 
+/** @brief Discard every byte currently in the RX ring (used on connection reset). */
 void serial_rx_drain(void) {
     rx_head = rx_tail = 0;             /* atomic enough at our cadence; ISR refills as needed */
 }
 
+/** @brief Number of TX frames the caller chose not to send (would not fit atomically). */
 int  serial_tx_dropped_frames(void) { return tx_dropped_frames; }
+/** @brief Increment the TX-dropped-frames counter (called by net.c on rejection). */
 void serial_tx_count_drop(void)     { tx_dropped_frames++; }

@@ -1,0 +1,8 @@
+# Generated Doxygen documentation
+docs/
+
+# Build artifacts
+*.o
+proj
+data/*.txt
+!data/.gitkeep

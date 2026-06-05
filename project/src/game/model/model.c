@@ -11,28 +11,40 @@
 #include "game/game.h"
 
 /* ── Power-aware helpers ──────────────────────────────────────────────────── */
- 
+
+/** @brief @return 2 coins per pickup while POWER_DOUBLE_COINS is active, else 1. */
 int model_coin_value(const GameModel *m) {
     return game_has_power(POWER_DOUBLE_COINS) ? 2 : 1;
 }
- 
+
+/** @brief @return @p base_speed, reduced by 25% while POWER_SLOW_MISSILES is active. */
 int model_missile_speed(const GameModel *m, int base_speed) {
     if (game_has_power(POWER_SLOW_MISSILES))
-        return base_speed * 3 / 4;   /* 25% mais lento */
+        return base_speed * 3 / 4;   /* 25% slower */
     return base_speed;
 }
 
 
 /* ── World RNG — LCG used exclusively for obstacle/pickup generation ─────── */
-static uint32_t wrng_state = 1;
+static uint32_t wrng_state = 1;   /**< State of the world LCG (kept in sync across peers). */
 
+/** @brief Seed the world RNG (forces a non-zero state). @param s Seed value. */
 void world_rand_seed(uint32_t s) { wrng_state = s ? s : 1; }
 
+/** @brief Draw the next world-RNG value (15-bit). @return a pseudo-random int in 0..0x7FFF. */
 int world_rand(void) {
     wrng_state = wrng_state * 1103515245u + 12345u;
     return (int)((wrng_state >> 16) & 0x7FFF);
 }
 
+/**
+ * @brief Initialise the whole model for a new program run: screen size, menu
+ *        defaults, all entity pools cleared, RNGs seeded, and settings/XP reset.
+ * @param m     Model to initialise.
+ * @param scr_w Screen width in pixels.
+ * @param scr_h Screen height in pixels.
+ * @param seed  Seed for both the world RNG and the C library rand().
+ */
 void model_init(GameModel *m, int scr_w, int scr_h, unsigned seed) {
     m->scr_w = scr_w;
     m->scr_h = scr_h;
@@ -85,6 +97,12 @@ void model_init(GameModel *m, int scr_w, int scr_h, unsigned seed) {
     srand(seed);
 }
 
+/**
+ * @brief Reset per-round state to begin a fresh run: recentre the player, clear
+ *        all obstacles/effects, reset score/timers, apply the start-of-run
+ *        shield power, and reinitialise opponent state.
+ * @param m Model to reset.
+ */
 void model_reset(GameModel *m) {
     m->player.y  = m->scr_h / 2;
     m->player.vy = 0;
@@ -109,9 +127,9 @@ void model_reset(GameModel *m) {
     m->magnet_timer = 0;
     m->powerup_timer = 0;
     m->last_rank = -1;
-    m->extra_life_used = false;   /*reset extra life por run */
+    m->extra_life_used = false;   /* reset the extra life each run */
 
-    /* POWER_SHIELD_START — dá shield no arranque de cada run */
+    /* POWER_SHIELD_START — grant a shield at the start of each run. */
     if (game_has_power(POWER_SHIELD_START))
         m->shield_timer = PU_DURATION;
 
@@ -131,6 +149,16 @@ void model_reset(GameModel *m) {
     m->login_error = false;
 }
 
+/**
+ * @brief Advance the simulation by one tick.
+ *
+ * Always ages animations and particles; while PLAYING it also runs player
+ * physics, scrolls and rotates zappers, moves/collects coins (with the magnet
+ * power), spawns and moves missiles and power-ups, updates the score, ramps the
+ * difficulty, and resolves collisions (with shield and extra-life handling).
+ *
+ * @param m Model to advance.
+ */
 void model_update(GameModel *m) {
     m->anim++;                       /* free-running animation clock */
     update_particles(m);             /* keep effects alive even on game over */
@@ -222,8 +250,8 @@ void model_update(GameModel *m) {
             mi->x -= mi->speed;
             if (mi->x + MISSILE_W < 0){
                  mi->active = 0;
-                game_add_xp(XP_PER_MISSILE);  /* XP por míssil esquivado */
-            } 
+                game_add_xp(XP_PER_MISSILE);  /* XP for a dodged missile */
+            }
         }
     }
 
@@ -289,11 +317,11 @@ void model_update(GameModel *m) {
             m->player.y < m->coins[i].y + COIN_SIZE) {
             m->coins[i].active = false;
 
-            int val = model_coin_value(m);           /* FEATURE: 1 ou 2      */
+            int val = model_coin_value(m);           /* 1 or 2 with double-coins */
 
             m->coins_collected+= val;
-            
-            game_add_xp(XP_PER_COIN * val);           /* FEATURE: XP          */
+
+            game_add_xp(XP_PER_COIN * val);          /* award coin XP */
 
             int ccx = m->coins[i].x + COIN_SIZE / 2, ccy = m->coins[i].y + COIN_SIZE / 2;
             for (int p = 0; p < COIN_PICK_PARTS; p++) {
@@ -328,7 +356,7 @@ void model_update(GameModel *m) {
                                12 + rand() % 8, col);
             pu->active = false;
 
-            game_add_xp(XP_PER_POWERUP);   /* FEATURE: XP por power-up */
+            game_add_xp(XP_PER_POWERUP);   /* award power-up XP */
         }
     }
 
@@ -348,10 +376,10 @@ void model_update(GameModel *m) {
         if (zap_hits_player(m, &m->zaps[i])) {
             if (m->shield_timer > 0) break;          /* invulnerable: shrug it off */
 
-                        /* FEATURE: POWER_EXTRA_LIFE */
+            /* POWER_EXTRA_LIFE: survive the first lethal hit with brief invulnerability. */
             if (game_has_power(POWER_EXTRA_LIFE) && !m->extra_life_used) {
                 m->extra_life_used = true;
-                m->shield_timer = 90;   /* invulnerabilidade temporária */
+                m->shield_timer = 90;   /* temporary invulnerability */
                 break;
             }
 
@@ -374,7 +402,7 @@ void model_update(GameModel *m) {
                 continue;
             }
 
-            /* FEATURE: POWER_EXTRA_LIFE */
+            /* POWER_EXTRA_LIFE: destroy the missile and survive once per run. */
             if (game_has_power(POWER_EXTRA_LIFE) && !m->extra_life_used) {
                 m->extra_life_used = true;
                 mi->active = 0;

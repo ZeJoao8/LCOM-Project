@@ -38,6 +38,11 @@ xpm_image_t shield_img;
 uint8_t    *magnet_pix = NULL;
 xpm_image_t magnet_img;
 
+/**
+ * @brief Load every XPM sprite into memory and set ::sprites_ok. Call once after
+ *        the video mode is set; rendering falls back to coloured rectangles if
+ *        any essential sprite fails to load.
+ */
 void view_init(void) {
     player_pix    = xpm_load((xpm_map_t) player_xpm,    XPM_8_8_8, &player_img);
     player_p2_pix = xpm_load((xpm_map_t) player_p2_xpm, XPM_8_8_8, &player_p2_img);
@@ -54,6 +59,7 @@ void view_init(void) {
                   coin_pix[0] && coin_pix[1] && coin_pix[2] && coin_pix[3]);
 }
 
+/** @brief Bytes per pixel for an XPM image's colour format. @return 1..4 bytes. */
 static uint8_t xpm_bpp(xpm_image_t img) {
     switch (img.type) {
         case XPM_INDEXED:               return 1;
@@ -65,7 +71,17 @@ static uint8_t xpm_bpp(xpm_image_t img) {
     }
 }
 
-/* Draw a loaded XPM at integer scale s. s==1 uses vg_draw_pixmap. */
+/**
+ * @brief Blit a loaded XPM sprite at integer scale @p s (magenta is transparent).
+ *
+ * Scale 1 uses the fast ::vg_draw_pixmap path; larger scales draw each source
+ * pixel as an @p s × @p s rectangle.
+ *
+ * @param pix Decoded pixel data (NULL is ignored).
+ * @param img XPM descriptor.
+ * @param x,y Top-left position.
+ * @param s   Integer scale factor.
+ */
 void draw_sprite(uint8_t *pix, xpm_image_t img, int x, int y, int s) {
     if (pix == NULL) return;
     if (s <= 1) {
@@ -85,7 +101,14 @@ void draw_sprite(uint8_t *pix, xpm_image_t img, int x, int y, int s) {
     }
 }
 
-/* Draw a native sprite with per-row horizontal shear to fake a tilt. */
+/**
+ * @brief Blit a sprite at native scale with a per-row horizontal shear to fake a
+ *        tilt (used so the player leans with its vertical velocity).
+ * @param pix   Decoded pixel data (NULL is ignored).
+ * @param img   XPM descriptor.
+ * @param x,y   Top-left position.
+ * @param slope Shear amount (fixed-point; rows above/below centre shift sideways).
+ */
 void draw_sprite_tilt(uint8_t *pix, xpm_image_t img, int x, int y, int slope) {
     if (pix == NULL) return;
     uint8_t bpp = xpm_bpp(img);

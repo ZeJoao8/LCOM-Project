@@ -6,7 +6,7 @@
  */
 #include "game/view_internal.h"
 
-/* A filled disc of radius r centred on (cx, cy). */
+/** @brief Draw a filled disc of radius @p r centred on (cx,cy). */
 static void fill_disc(int cx, int cy, int r, uint32_t col) {
     for (int dy = -r; dy <= r; dy++) {
         int hw = isqrt_i(r * r - dy * dy);
@@ -14,7 +14,7 @@ static void fill_disc(int cx, int cy, int r, uint32_t col) {
     }
 }
 
-/* Moon high in the sky: a soft halo, the disc, and a couple of dim craters. */
+/** @brief Draw the moon: a soft halo, the disc, and a few dim craters. */
 static void draw_moon(void) {
     int cx = scr_w - 130, cy = 86, r = 30;
     fill_disc(cx, cy, r + 5, COL_MOON_GLOW);     /* halo  */
@@ -24,14 +24,14 @@ static void draw_moon(void) {
     fill_disc(cx + 3, cy - 9, 3, COL_MOON_GLOW);
 }
 
-/* A fluffy cloud blob built from a few overlapping rectangles. */
+/** @brief Draw a fluffy cloud blob at (x,y) sized by @p s from overlapping rects. */
 static void draw_cloud(int x, int y, int s) {
     draw_rect(x,         y + s,     6 * s, 2 * s, COL_CLOUD);
     draw_rect(x + s,     y,         4 * s, 2 * s, COL_CLOUD);
     draw_rect(x + 3 * s, y - s + 2, 2 * s, 2 * s, COL_CLOUD);
 }
 
-/* Three clouds drifting slowly leftward, wrapping around the screen width. */
+/** @brief Draw three clouds drifting slowly leftward, wrapping around the screen. */
 static void draw_clouds(void) {
     int drift = M->anim / 6;
     int span  = scr_w + 120;
@@ -44,7 +44,13 @@ static void draw_clouds(void) {
     }
 }
 
-/* One wrapping row of building silhouettes, scrolled by @p scroll px. */
+/**
+ * @brief Draw one wrapping row of building silhouettes with lit windows.
+ * @param scroll            Horizontal scroll offset in pixels.
+ * @param height_from_floor Pixels the skyline base sits above the floor.
+ * @param max_h             Maximum extra building height (deterministic per slot).
+ * @param col               Building colour.
+ */
 static void draw_skyline(int scroll, int height_from_floor, int max_h, uint32_t col) {
     int bw = 46;                                    /* width slot per building   */
     int base_y = scr_h - FLOOR_H - height_from_floor;
@@ -66,8 +72,12 @@ static void draw_skyline(int scroll, int height_from_floor, int max_h, uint32_t 
     }
 }
 
-/* Procedural parallax backdrop: sky gradient, moon, stars, drifting clouds and
- * three scrolling skylines (far / near / foreground) for depth. */
+/**
+ * @brief Draw the full procedural parallax backdrop: sky gradient, moon, stars,
+ *        drifting clouds and three scrolling skylines (far/near/foreground) at
+ *        increasing speeds for depth. Falls back to a flat fill when visual
+ *        effects are disabled.
+ */
 void draw_parallax(void) {
     if (!M->visual_effects) {
         draw_rect(0, 0, scr_w, scr_h - FLOOR_H, COL_BG);

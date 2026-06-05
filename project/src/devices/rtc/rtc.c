@@ -34,10 +34,12 @@
 
 static int rtc_hook_id = RTC_HOOK_ID;
 
+/** @brief Convert a packed BCD byte to its binary value. */
 static int bcd_to_bin(uint8_t bcd) {
     return ((bcd >> 4) * 10) + (bcd & 0x0F);
 }
 
+/** @brief Read one RTC register: select it via the address port, read the data port. @return register value (0 on I/O error). */
 static uint8_t rtc_read_reg(uint8_t reg) {
     uint32_t val;
     if (sys_outb(RTC_ADDR_REG, reg) != OK) return 0;
@@ -45,12 +47,14 @@ static uint8_t rtc_read_reg(uint8_t reg) {
     return (uint8_t) val;
 }
 
+/** @brief Write @p val to RTC register @p reg. @return 0 on success, 1 on I/O error. */
 static int rtc_write_reg(uint8_t reg, uint8_t val) {
     if (sys_outb(RTC_ADDR_REG, reg) != OK) return 1;
     if (sys_outb(RTC_DATA_REG, val) != OK) return 1;
     return 0;
 }
 
+/** @brief Subscribe the RTC interrupt (IRQ 8) in reenable mode. @param bit_no Out: mask bit. @return 0 on success, 1 on failure. */
 int rtc_subscribe_int(uint8_t *bit_no) {
     if (bit_no == NULL) return 1;
     *bit_no = rtc_hook_id;
@@ -59,26 +63,40 @@ int rtc_subscribe_int(uint8_t *bit_no) {
     return 0;
 }
 
+/** @brief Remove the RTC interrupt policy. @return 0 on success, 1 on failure. */
 int rtc_unsubscribe_int(void) {
     if (sys_irqrmpolicy(&rtc_hook_id) != OK) return 1;
     return 0;
 }
 
+/** @brief RTC interrupt handler: reads register C to acknowledge and clear the interrupt flags. */
 void rtc_ih(void) {
     /* Reading register C acknowledges the interrupt and clears its flags. */
     (void) rtc_read_reg(RTC_REG_C);
 }
 
+/** @brief Enable the update-ended interrupt (reg B, UIE bit). @return 0 on success, 1 on failure. */
 int rtc_enable_update_int(void) {
     uint8_t b = rtc_read_reg(RTC_REG_B);
     return rtc_write_reg(RTC_REG_B, b | RTC_UIE);
 }
 
+/** @brief Disable the update-ended interrupt (reg B, UIE bit). @return 0 on success, 1 on failure. */
 int rtc_disable_update_int(void) {
     uint8_t b = rtc_read_reg(RTC_REG_B);
     return rtc_write_reg(RTC_REG_B, b & ~RTC_UIE);
 }
 
+/**
+ * @brief Read the full current date and time into @p dt.
+ *
+ * Waits for any in-progress update to finish, reads all six time/date
+ * registers, then normalises them to binary 24-hour form based on the BCD and
+ * 12/24-hour flags in register B.
+ *
+ * @param dt Out: receives the decoded date/time.
+ * @return 0 on success, 1 if @p dt is NULL.
+ */
 int rtc_read_datetime(rtc_datetime *dt) {
     if (dt == NULL) return 1;
 
@@ -119,6 +137,10 @@ int rtc_read_datetime(rtc_datetime *dt) {
     return 0;
 }
 
+/**
+ * @brief Derive a pseudo-random seed from the current time (seconds-of-day).
+ * @return A seed value; falls back to 42 if the clock cannot be read.
+ */
 unsigned rtc_seed(void) {
     rtc_datetime dt;
     if (rtc_read_datetime(&dt) != 0) return 42u;

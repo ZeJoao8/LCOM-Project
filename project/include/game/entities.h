@@ -14,9 +14,9 @@
 #include "game/config.h"    /* MAX_* sizes  */
 
 
-/* ── Tamanhos de string ───────────────────────────────────────────────────── */
-#define MAX_NAME_LEN    16   /* FEATURE: nome do jogador (15 chars + '\0')    */
-#define SCORE_WHEN_LEN  20   /* "DD/MM/YY HH:MM:SS" + '\0'                   */
+/* ── String sizes ─────────────────────────────────────────────────────────── */
+#define MAX_NAME_LEN    16   /* player name (15 chars + '\0')                 */
+#define SCORE_WHEN_LEN  20   /* "DD/MM/YY HH:MM:SS" + '\0'                     */
 
 
 
@@ -79,8 +79,8 @@ typedef struct {
 } ScoreEntry;
 
 /**
- * Whole game state. A single instance lives in game.c; the model mutates it,
- * the view reads it (const), the controller feeds input into it.
+ * @brief Whole game state. A single instance lives in game.c; the model mutates
+ *        it, the view reads it (const), and the controller feeds input into it.
  */
 typedef struct {
     game_state_t state;
@@ -141,7 +141,7 @@ typedef struct {
     int        high_count;    /* number of valid entries in high_scores  */
     int        last_rank;     /* rank (0-based) this run earned, or -1   */
 
-    /* XP e Poderes */
+    /* XP and powers */
     int      xp_total;
     uint32_t powers_unlocked;
     bool     extra_life_used;

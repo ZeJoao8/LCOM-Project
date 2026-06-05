@@ -6,7 +6,14 @@
 #include "game/model.h"
 #include "game/model_internal.h"
 
-/* Drop a short row of coins inside a safe vertical band [lo, hi]. */
+/**
+ * @brief Drop a short row of coins inside the safe vertical band [band_lo, band_hi].
+ * @param m       Game model.
+ * @param cx      X position of the first coin.
+ * @param band_lo Top of the safe band.
+ * @param band_hi Bottom of the safe band.
+ * @param pattern Row shape: 0 arc up, 1 arc down, 2 straight, 3 zig-zag.
+ */
 static void spawn_coins(GameModel *m, int cx, int band_lo, int band_hi, int pattern) {
     if (band_hi - band_lo < COIN_SIZE) return;        /* corridor too tight */
 
@@ -38,7 +45,11 @@ static void spawn_coins(GameModel *m, int cx, int band_lo, int band_hi, int patt
     }
 }
 
-/* Spawn a single beam zapper from the right edge. */
+/**
+ * @brief Spawn one beam zapper at the right edge with a random type, length and
+ *        position, then drop a coin row in the wider corridor beside it.
+ * @param m Game model.
+ */
 void spawn_zapper(GameModel *m) {
     for (int i = 0; i < MAX_ZAPPERS; i++) {
         if (m->zaps[i].active) continue;
@@ -78,7 +89,11 @@ void spawn_zapper(GameModel *m) {
     }
 }
 
-/* Spawn one floating power-up from the right edge, inside the playable band. */
+/**
+ * @brief Spawn one floating power-up of a random type at the right edge, within
+ *        the playable vertical band.
+ * @param m Game model.
+ */
 void spawn_powerup(GameModel *m) {
     for (int i = 0; i < MAX_POWERUPS; i++) {
         if (m->powerups[i].active) continue;

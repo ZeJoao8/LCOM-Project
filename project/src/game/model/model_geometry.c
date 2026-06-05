@@ -17,9 +17,18 @@ static const int sin1024[ANG_STEPS] = {
     -1024, -1019, -1004,  -980,  -946,  -903,  -851,  -792,
      -724,  -650,  -569,  -483,  -392,  -297,  -200,  -100,
 };
+/** @brief Integer sine of angle @p a (ANG_STEPS per turn). @return sin scaled by 1024. */
 int isin(int a) { return sin1024[((a % ANG_STEPS) + ANG_STEPS) % ANG_STEPS]; }
+/** @brief Integer cosine of angle @p a. @return cos scaled by 1024. */
 int icos(int a) { return isin(a + ANG_VERT); }
 
+/**
+ * @brief Compute the two screen-space endpoints of a zapper beam from its centre,
+ *        half-length and angle.
+ * @param z      Zapper to evaluate.
+ * @param ax,ay  Out: one endpoint.
+ * @param bx,by  Out: the opposite endpoint.
+ */
 void zap_endpoints(const Zapper *z, int *ax, int *ay, int *bx, int *by) {
     int dx = (z->half * icos(z->ang)) / 1024;
     int dy = (z->half * isin(z->ang)) / 1024;
@@ -27,7 +36,13 @@ void zap_endpoints(const Zapper *z, int *ax, int *ay, int *bx, int *by) {
     *bx = z->cx + dx; *by = z->cy + dy;
 }
 
-/* Squared distance from point P to segment A-B (integer math). */
+/**
+ * @brief Squared distance from point P to segment A-B, using integer math only.
+ * @param px,py Point P.
+ * @param ax,ay Segment start A.
+ * @param bx,by Segment end B.
+ * @return The squared distance (avoids a sqrt; compare against a squared threshold).
+ */
 long pt_seg_d2(int px, int py, int ax, int ay, int bx, int by) {
     long abx = bx - ax, aby = by - ay;
     long apx = px - ax, apy = py - ay;
@@ -41,7 +56,17 @@ long pt_seg_d2(int px, int py, int ax, int ay, int bx, int by) {
     return dx * dx + dy * dy;
 }
 
-/* True if the player collides with the beam (sampled along the body). */
+/**
+ * @brief Test whether the player overlaps a zapper beam.
+ *
+ * Samples three points down the player's body and checks each against the beam
+ * segment, treating a hit as the squared distance falling under the combined
+ * beam/player half-width.
+ *
+ * @param m Game model (for the player position).
+ * @param z Zapper to test.
+ * @return true if the player collides with the beam.
+ */
 bool zap_hits_player(const GameModel *m, const Zapper *z) {
     int ax, ay, bx, by;
     zap_endpoints(z, &ax, &ay, &bx, &by);

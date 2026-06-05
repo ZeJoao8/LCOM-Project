@@ -8,7 +8,12 @@
 #include "game/view_internal.h"
 #include "devices/video_gr/video_gr.h"   /* vg_draw_rectangle */
 
-/* Filled rectangle, clipped to the screen. */
+/**
+ * @brief Draw a filled rectangle, clipped to the screen bounds.
+ * @param x,y   Top-left corner.
+ * @param w,h   Size in pixels.
+ * @param color Packed colour value.
+ */
 void draw_rect(int x, int y, int w, int h, uint32_t color) {
     if (x < 0)      { w += x; x = 0; }
     if (y < 0)      { h += y; y = 0; }
@@ -63,6 +68,13 @@ static const uint8_t font_5x7[][7] = {
     ['-'] = {0x00,0x00,0x00,0x1F,0x00,0x00,0x00},
 };
 
+/**
+ * @brief Draw one glyph of the 5x7 bitmap font, scaled by @p s.
+ * @param c     Character to draw (unmapped characters are skipped).
+ * @param x,y   Top-left position.
+ * @param s     Integer pixel scale.
+ * @param color Packed colour value.
+ */
 void draw_char(char c, int x, int y, int s, uint32_t color) {
     if (c < 0 || (unsigned char)c >= sizeof(font_5x7)/sizeof(font_5x7[0]))
         return;
@@ -80,6 +92,7 @@ void draw_char(char c, int x, int y, int s, uint32_t color) {
     }
 }
 
+/** @brief Draw a left-aligned string at (x,y), 6*s pixels per glyph. */
 void draw_text(const char *str, int x, int y, int s, uint32_t color) {
     while (*str) {
         draw_char(*str, x, y, s, color);
@@ -88,27 +101,32 @@ void draw_text(const char *str, int x, int y, int s, uint32_t color) {
     }
 }
 
-/* Text with a 1-unit drop shadow, so it stays legible over the busy backdrop. */
+/** @brief Draw a string with a 1-unit drop shadow for legibility over the backdrop. */
 void draw_text_sh(const char *str, int x, int y, int s, uint32_t color) {
     draw_text(str, x + s, y + s, s, COL_SHADOW);
     draw_text(str, x,     y,     s, color);
 }
 
-/* Draw text horizontally centred on cx. */
+/** @brief Draw a string horizontally centred on @p cx. */
 void draw_text_c(const char *s, int cx, int y, int scale, uint32_t col) {
     int n = 0;
     for (const char *p = s; *p; p++) n++;
     draw_text(s, cx - n * 6 * scale / 2, y, scale, col);
 }
 
-/* Centred text with a drop shadow. */
+/** @brief Draw a horizontally-centred string with a drop shadow. */
 void draw_text_c_sh(const char *s, int cx, int y, int scale, uint32_t col) {
     int n = 0;
     for (const char *p = s; *p; p++) n++;
     draw_text_sh(s, cx - n * 6 * scale / 2, y, scale, col);
 }
 
-/* Convert an integer to a string. */
+/**
+ * @brief Format integer @p val as a decimal string into @p buf.
+ * @param val   Value to convert.
+ * @param buf   Destination buffer.
+ * @param bufsz Size of @p buf (output is always NUL-terminated).
+ */
 void int_to_str(int val, char *buf, int bufsz) {
     if (bufsz < 2) return;
     if (val < 0) { buf[0] = '-'; buf++; bufsz--; val = -val; }
@@ -119,13 +137,19 @@ void int_to_str(int val, char *buf, int bufsz) {
     *buf = '\0';
 }
 
+/** @brief Integer (floor) square root of @p v. @return floor(sqrt(v)). */
 int isqrt_i(int v) {
     int r = 0;
     while ((r + 1) * (r + 1) <= v) r++;
     return r;
 }
 
-/* Linear interpolate two 24-bit colours, t in [0,255]. */
+/**
+ * @brief Linearly interpolate two 24-bit colours per channel.
+ * @param a,b Endpoint colours.
+ * @param t   Blend factor in [0,255] (0 = @p a, 255 = @p b).
+ * @return The interpolated colour.
+ */
 uint32_t lerp_col(uint32_t a, uint32_t b, int t) {
     int ra=(a>>16)&0xFF, ga=(a>>8)&0xFF, ba=a&0xFF;
     int rb=(b>>16)&0xFF, gb=(b>>8)&0xFF, bb=b&0xFF;
@@ -135,9 +159,14 @@ uint32_t lerp_col(uint32_t a, uint32_t b, int t) {
     return ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)bl;
 }
 
-/* Darken the whole frame toward black by scaling every colour byte. Works on any
- * direct-colour layout since each channel byte is scaled independently. t is the
- * surviving brightness: 0 = full black, 255 = unchanged (fast path). */
+/**
+ * @brief Darken the whole back buffer toward black by scaling every colour byte.
+ *
+ * Works on any direct-colour layout because each channel byte is scaled
+ * independently.
+ *
+ * @param t Surviving brightness: 0 = full black, 255 = unchanged (fast path).
+ */
 void fade_buffer(int t) {
     if (t >= 255) return;
     if (t < 0) t = 0;

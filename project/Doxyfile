@@ -1,0 +1,71 @@
+# Doxyfile for the LCOM Jetpack Joyride project.
+# Generate the HTML docs with:  doxygen Doxyfile   (or: make docs)
+# Output lands in docs/html/index.html
+
+#---------------------------------------------------------------------------
+# Project
+#---------------------------------------------------------------------------
+PROJECT_NAME           = "Jetpack Joyride — LCOM"
+PROJECT_BRIEF          = "MINIX arcade game: MVC engine + timer/KBC/mouse/RTC/serial/video drivers"
+OUTPUT_DIRECTORY       = docs
+OUTPUT_LANGUAGE        = English
+JAVADOC_AUTOBRIEF      = YES
+OPTIMIZE_OUTPUT_FOR_C  = YES
+TAB_SIZE               = 4
+
+#---------------------------------------------------------------------------
+# Build: document everything, including static helpers
+#---------------------------------------------------------------------------
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+EXTRACT_PRIVATE        = YES
+EXTRACT_LOCAL_CLASSES  = YES
+HIDE_UNDOC_MEMBERS     = NO
+SORT_MEMBER_DOCS       = NO
+
+#---------------------------------------------------------------------------
+# Input
+#---------------------------------------------------------------------------
+INPUT                  = include src README.md
+USE_MDFILE_AS_MAINPAGE = README.md
+FILE_PATTERNS          = *.c *.h *.md
+RECURSIVE              = YES
+# Exclude the bundled XPM image assets (not source code).
+EXCLUDE_PATTERNS       = */src/img/*
+
+#---------------------------------------------------------------------------
+# Preprocessing: define the LCF BIT() macro so headers parse cleanly
+#---------------------------------------------------------------------------
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+PREDEFINED             = BIT(n)=(1<<(n))
+
+#---------------------------------------------------------------------------
+# Source browser
+#---------------------------------------------------------------------------
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+
+#---------------------------------------------------------------------------
+# Diagrams (graphs are skipped automatically if dot/graphviz is absent)
+#---------------------------------------------------------------------------
+HAVE_DOT               = NO
+
+#---------------------------------------------------------------------------
+# Output formats
+#---------------------------------------------------------------------------
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+GENERATE_TREEVIEW      = YES
+GENERATE_LATEX         = NO
+
+#---------------------------------------------------------------------------
+# Warnings
+#---------------------------------------------------------------------------
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_NO_PARAMDOC       = YES

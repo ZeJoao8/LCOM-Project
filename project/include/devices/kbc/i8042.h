@@ -1,6 +1,13 @@
 #ifndef _LCOM_I8042_H_
 #define _LCOM_I8042_H_
 
+/**
+ * @file i8042.h
+ * @brief Register addresses, status-register bit masks, and command/scancode
+ *        constants for the i8042 keyboard controller and the PS/2 mouse it
+ *        relays commands to.
+ */
+
 #include <lcom/lcf.h>
 
 #define KBD_IRQ 1

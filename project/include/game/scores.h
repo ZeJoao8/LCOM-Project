@@ -25,31 +25,29 @@ int scores_insert(ScoreEntry *table, int *count, int max,
                   const char *name, int score, const char *when);
 
 
-/* ── FEATURE: Leaderboard — top N e todos ────────────────────────────────── */
- 
+/* ── Leaderboard — top N and all ──────────────────────────────────────────── */
+
 /**
- * Copia as melhores @p n entradas de @p table para @p out.
- * Define *out_count com quantas foram copiadas (pode ser < n se table tiver
- * menos de n entradas).
+ * @brief Copy the best @p n entries of @p table into @p out.
+ * @param table     Source leaderboard (sorted best-first).
+ * @param count     Number of valid entries in @p table.
+ * @param n         Maximum number of entries to copy.
+ * @param out       Destination array.
+ * @param out_count Out: number actually copied (< @p n if @p table has fewer).
  */
 void scores_get_top(const ScoreEntry *table, int count,
                     int n,
                     ScoreEntry *out, int *out_count);
- 
+
 /**
- * Copia todas as entradas de @p table para @p out (já ordenadas).
- * Define *out_count com o número total copiado.
+ * @brief Copy every entry of @p table into @p out (already sorted).
+ * @param table     Source leaderboard.
+ * @param count     Number of valid entries in @p table.
+ * @param out       Destination array.
+ * @param out_count Out: total number copied.
  */
 void scores_get_all(const ScoreEntry *table, int count,
                     ScoreEntry *out, int *out_count);
- 
-/* ── FEATURE: XP persistente ─────────────────────────────────────────────── */
- 
-/** Lê o XP guardado no ficheiro XP_PATH (0 se o ficheiro não existir). */
-int  scores_load_xp(void);
- 
-/** Grava @p xp no ficheiro XP_PATH. */
-void scores_save_xp(int xp);
 
 
 #endif /* _GAME_SCORES_H_ */

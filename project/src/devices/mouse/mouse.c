@@ -1,3 +1,10 @@
+/**
+ * @file mouse.c
+ * @brief PS/2 mouse driver. Subscribes IRQ 12, captures bytes in the interrupt
+ *        handler, reassembles and parses the 3-byte packets, and issues mouse
+ *        commands through the KBC.
+ */
+
 #include "devices/mouse/mouse.h"
 #include "devices/kbc/i8042.h"
 #include "devices/kbc/kbc.h"
@@ -5,13 +12,14 @@
 #include <lcom/lcf.h>
 #include <stdint.h>
 
-int mouse_hook_id = 12; // MOUSE_IRQ
-uint8_t mouse_bytes[3];
-struct packet mouse_packet;
-uint8_t packet_byte_idx = 0;
-uint8_t mouse_current_byte;
-bool mouse_error = false;
+int mouse_hook_id = 12;        /**< Hook id for the mouse IRQ (12) policy.       */
+uint8_t mouse_bytes[3];        /**< Bytes of the packet currently being built.   */
+struct packet mouse_packet;    /**< Most recently parsed packet.                 */
+uint8_t packet_byte_idx = 0;   /**< Index of the next byte expected (0..2).      */
+uint8_t mouse_current_byte;    /**< Last raw byte read by ::mouse_ih.            */
+bool mouse_error = false;      /**< Error flag set by ::mouse_ih on a bad read.  */
 
+/** @brief Subscribe IRQ 12 (reenable + exclusive); returns @p bit_no. @return 0 on success, 1 on failure. */
 int(mouse_subscribe_int)(uint8_t *bit_no) {
   if (bit_no == NULL)
     return 1;
@@ -22,12 +30,18 @@ int(mouse_subscribe_int)(uint8_t *bit_no) {
   return 0;
 }
 
+/** @brief Remove the mouse IRQ policy. @return 0 on success, 1 on failure. */
 int(mouse_unsubscribe_int)() {
   if (sys_irqrmpolicy(&mouse_hook_id) != 0)
     return 1;
   return 0;
 }
 
+/**
+ * @brief Mouse interrupt handler. Validates the KBC status (output buffer full
+ *        and AUX bit set), reads one byte into ::mouse_current_byte, and sets
+ *        ::mouse_error on any failure or parity/timeout condition.
+ */
 void(mouse_ih)() {
   uint8_t status;
   mouse_error = false;
@@ -39,7 +53,7 @@ void(mouse_ih)() {
 
   if (status & KBC_OBF) {
     if ((status & KBC_AUX) == 0) {
-      mouse_error = true; // não é do rato
+      mouse_error = true; // not a mouse byte
       return;
     }
     if (util_sys_inb(KBC_OUT_BUF, &mouse_current_byte) != 0) {
@@ -55,6 +69,11 @@ void(mouse_ih)() {
   }
 }
 
+/**
+ * @brief Append the last read byte to the packet being assembled. The first
+ *        byte is only accepted if its sync bit is set, which keeps the 3-byte
+ *        packet aligned; otherwise the byte is dropped.
+ */
 void(mouse_sync_packet)() {
   if (packet_byte_idx == 0 && (mouse_current_byte & MOUSE_SYNC) == 0) {
     // Out of sync
@@ -65,6 +84,10 @@ void(mouse_sync_packet)() {
   packet_byte_idx++;
 }
 
+/**
+ * @brief Decode the three assembled bytes into ::mouse_packet: button flags,
+ *        sign-extended X/Y deltas, and overflow flags.
+ */
 void(mouse_parse_packet)() {
   mouse_packet.bytes[0] = mouse_bytes[0];
   mouse_packet.bytes[1] = mouse_bytes[1];
@@ -90,6 +113,7 @@ void(mouse_parse_packet)() {
   mouse_packet.y_ov = mouse_bytes[0] & MOUSE_Y_OVF;
 }
 
+/** @brief Send a command to the mouse via the KBC and wait for ACK (NACK retries, ERR aborts; see mouse.h). */
 int(mouse_write_cmd)(uint8_t cmd) {
   uint8_t ack_byte;
   int retries = 10;

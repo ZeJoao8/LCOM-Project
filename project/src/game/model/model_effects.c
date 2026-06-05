@@ -7,6 +7,14 @@
 #include "game/model.h"
 #include "game/model_internal.h"
 
+/**
+ * @brief Activate the first free particle slot with the given state.
+ * @param m       Game model.
+ * @param x,y     Spawn position.
+ * @param vx,vy   Initial velocity.
+ * @param life    Lifetime in frames.
+ * @param col     Particle colour.
+ */
 void spawn_particle(GameModel *m, int x, int y, int vx, int vy,
                     int life, uint32_t col) {
     for (int i = 0; i < MAX_PARTS; i++) {
@@ -19,6 +27,7 @@ void spawn_particle(GameModel *m, int x, int y, int vx, int vy,
     }
 }
 
+/** @brief Activate the first free popup slot at (x,y) with POPUP_LIFE frames. */
 void spawn_popup(GameModel *m, int x, int y) {
     for (int i = 0; i < MAX_POPUPS; i++) {
         if (!m->popups[i].active) {
@@ -29,12 +38,24 @@ void spawn_popup(GameModel *m, int x, int y) {
     }
 }
 
+/**
+ * @brief Emit @p n particles with random velocities and lifetimes from (x,y).
+ * @param m   Game model.
+ * @param x,y Burst origin.
+ * @param n   Number of particles.
+ * @param col Particle colour.
+ */
 void burst(GameModel *m, int x, int y, int n, uint32_t col) {
     for (int i = 0; i < n; i++)
         spawn_particle(m, x, y, (rand() % 13) - 6, (rand() % 13) - 8,
                        14 + (rand() % 12), col);
 }
 
+/**
+ * @brief Advance every active particle (with gravity) and popup, expiring those
+ *        whose lifetime ran out, and tick down the hit-flash timer.
+ * @param m Game model.
+ */
 void update_particles(GameModel *m) {
     for (int i = 0; i < MAX_PARTS; i++) {
         if (!m->parts[i].active) continue;
@@ -51,7 +72,11 @@ void update_particles(GameModel *m) {
     if (m->hit_flash > 0) m->hit_flash--;
 }
 
-/* Player death: explosion + red flash, then game over. */
+/**
+ * @brief Trigger the player's death: a multi-colour explosion burst and a red
+ *        screen flash, update the high score, and switch to STATE_GAMEOVER.
+ * @param m Game model.
+ */
 void player_explode(GameModel *m) {
     int cx = PLAYER_X + PLAYER_W / 2, cy = m->player.y + PLAYER_H / 2;
     burst(m, cx, cy, EXPLODE_BURST_RED,  COL_GAMEOVER);

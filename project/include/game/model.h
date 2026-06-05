@@ -33,12 +33,15 @@ int icos(int a);
 /** Compute the two screen-space endpoints of a zapper beam. */
 void zap_endpoints(const Zapper *z, int *ax, int *ay, int *bx, int *by);
 
+/** Value of a single coin for this model (doubled while POWER_DOUBLE_COINS is active). */
 int model_coin_value(const GameModel *m);
- 
+
 /**
- * Devolve a velocidade de míssil ajustada:
- *   speed          — sem poder
- *   speed * 3 / 4  — com POWER_SLOW_MISSILES activo
+ * @brief Adjust a missile's base speed for the active powers.
+ * @param m          Game model (queried for active powers).
+ * @param base_speed Nominal missile speed.
+ * @return @p base_speed normally, or @p base_speed * 3 / 4 while
+ *         POWER_SLOW_MISSILES is active.
  */
 int model_missile_speed(const GameModel *m, int base_speed);
 
